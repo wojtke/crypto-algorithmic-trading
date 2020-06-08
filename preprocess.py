@@ -9,6 +9,8 @@ import random
 import numpy as np
 from time import time
 
+from log import Logger
+
 
 SYMBOL = 'BTCUSDT'
 INTERVAL = '15m'
@@ -16,10 +18,10 @@ INTERVAL = '15m'
 PAST_SEQ_LEN = 50
 FUTURE_CHECK_LEN = 50
 
-DESIRED_CHANGE = 0.01
+TARGET_CHANGE = 0.01
 
 
-SAVE_NAME = f'{SYMBOL}{INTERVAL}-{PAST_SEQ_LEN}x{FUTURE_CHECK_LEN}~{DESIRED_CHANGE}-{round(time())}'
+SAVE_NAME = f'{SYMBOL}{INTERVAL}-{PAST_SEQ_LEN}x{FUTURE_CHECK_LEN}~{TARGET_CHANGE}-normal-{round(time())}'
 
 
 iv_sec = {'1m':60, '3m':60*3, '5m':60*5, 
@@ -30,6 +32,7 @@ iv_sec = {'1m':60, '3m':60*3, '5m':60*5,
 
 def load_raw_data():
     print("Loading data...")
+    global df
     raw_data_path = f"RAW_DATA/Binance_{SYMBOL}_{INTERVAL}.json"
     df = pd.read_json(raw_data_path)
     df = df[[0,1,2,3,4,5]]
@@ -43,16 +46,10 @@ def load_raw_data():
     print("...loading done\n")
     return df
 
-def classify(df,): 
+def classify(df): 
     print("Classifying data...")
 
     leng = int(len(df.index) - FUTURE_CHECK_LEN)
-
-    if type(DESIRED_CHANGE)==float:
-        h = 1 + DESIRED_CHANGE
-        l = 1 - DESIRED_CHANGE
-    else:
-        print("Nie ma ustawionego takiego DESIRED_CHANGE")
 
     counter = {"H":0, "L":0, "N":0, "B":0}
     classification = []
@@ -60,8 +57,7 @@ def classify(df,):
     pb = Progressbar(leng, name="Classification")
 
     for i in range(leng): #mozna zoptymalizowac troche
-        high = h*df['close'][i]
-        low = l*df['close'][i]
+        high, low = classification_target(i)
 
         counter_case, to_append = assign_classification(high, low, i)
         classification.append(to_append)
@@ -72,11 +68,24 @@ def classify(df,):
     del pb
 
     print(counter)
+    log.log(counter)
+
     classification = pd.DataFrame({'target': classification})
     df = pd.concat((df, classification), axis=1)
 
     print("...classifying done\n")
     return df
+
+def classification_target(i):
+    high = (1 + TARGET_CHANGE)*df['close'][i]
+    low = (1 - TARGET_CHANGE)*df['close'][i]
+
+    return high, low
+    '''
+    high = 
+    low =
+    '''
+
 
 def assign_classification(high, low, i):#
     for j in range(FUTURE_CHECK_LEN):
@@ -126,10 +135,10 @@ def separate(df):
     #14 aug 2019 high volatility down ts 1565740800000
 
     #too small timedelta on smaller intervals can cause problems
-    windows = [ [parse_datetime("2019"+"01"+"28"), timedelta(days=6)],
-                [parse_datetime("2019"+"03"+"16"), timedelta(days=6)],
-                [parse_datetime("2019"+"05"+"17"), timedelta(days=6)],
-                [parse_datetime("2019"+"08"+"14"), timedelta(days=6)] ] 
+    windows = [ [parse_datetime("2019"+"01"+"28"), timedelta(days=7)],
+                [parse_datetime("2019"+"03"+"16"), timedelta(days=7)],
+                [parse_datetime("2019"+"05"+"16"), timedelta(days=7)],
+                [parse_datetime("2019"+"08"+"15"), timedelta(days=7)] ] 
 
     end = df.iloc[-1]['openTimestamp']
 
@@ -191,7 +200,7 @@ def scale(df_t, df_v):
     print("Scaler scales: ", scaler.scale_)
 
     pickle_out = open(f"scalers/{SAVE_NAME}-scaler_data.pickle", "wb")
-    pickle.dump('[scaler.mean_, scaler.scale_]', pickle_out)
+    pickle.dump([scaler.mean_, scaler.scale_], pickle_out)
     pickle_out.close()
     print(f'Saved the scaler')
 
@@ -200,6 +209,7 @@ def scale(df_t, df_v):
 
 def create_seqs(df, which):
     print(f"Creating {which} sequences...")
+
     sliding_window = deque(maxlen=PAST_SEQ_LEN) 
 
     #it is easier to split between two to balance out later
@@ -236,7 +246,8 @@ def create_seqs(df, which):
 
     pct_buys = round(100*len(buys)/(len(buys)+len(sells)))
     print(f'Created {which} seqs, ({len(buys)} buys, {len(sells)} sells - {pct_buys}%/{100-pct_buys}%)')
-
+    
+    log.log(f"{pct_buys}%/{100-pct_buys}%")
     #we need to balance out
     lower = min(len(buys), len(sells)) 
     buys = buys[:lower]  
@@ -258,46 +269,76 @@ def create_seqs(df, which):
         y.append(target)  
 
     print(f'Returning {which} sequences ({len(y)})')
+    log.log(len(y))
 
     print(f"...creating {which} sequences done\n")
     return np.array(X), y 
 
 
+def main():
+    df = load_raw_data()
 
-df = load_raw_data()
+    df = classify(df)
 
-df = classify(df)
+    df = to_pct(df)
 
-df = to_pct(df)
+    df_t, df_v = separate(df)
+    del df
 
-df_t, df_v = separate(df)
-del df
+    df_t, df_v = scale(df_t, df_v)
 
-df_t, df_v = scale(df_t, df_v)
+    train_x, train_y = create_seqs(df_t, "train")
+    del df_t
 
-train_x, train_y = create_seqs(df_t, "train")
-del df_t
+    val_x, val_y = create_seqs(df_v, 'val')
+    del df_v
 
-val_x, val_y = create_seqs(df_v, 'val')
-del df_v
+    #print('--------------------------------------')
+    print(f"Train data len: {len(train_y)}, Validation data len: {len(val_y)}")
+    print(f"TRAIN:   Sells: {train_y.count(0)}, Buys: {train_y.count(1)}")
+    print(f"TEST:    Sells: {val_y.count(0)}, Buys: {val_y.count(1)}")
+    print(f"Validation is {round(100*len(val_y)/(len(val_y)+len(train_y)), 2)}% of all data")
+    #print('Sample: \n',  train_y[5], train_x[5])
 
-#print('--------------------------------------')
-print(f"Train data len: {len(train_y)}, Validation data len: {len(val_y)}")
-print(f"TRAIN:   Sells: {train_y.count(0)}, Buys: {train_y.count(1)}")
-print(f"TEST:    Sells: {val_y.count(0)}, Buys: {val_y.count(1)}")
-print(f"Validation is {round(100*len(val_y)/(len(val_y)+len(train_y)), 2)}% of all data")
-#print('Sample: \n',  train_y[5], train_x[5])
+    log.log(f"{round(100*len(val_y)/(len(val_y)+len(train_y)), 2)}%")
 
 
-print('\nSaving training data...')
-pickle_out = open(f"TRAIN_DATA/{SAVE_NAME}-t.pickle", "wb")
-pickle.dump((train_x, train_y), pickle_out)
-pickle_out.close()
+    print('\nSaving training data...')
+    pickle_out = open(f"TRAIN_DATA/{SAVE_NAME}-t.pickle", "wb")
+    pickle.dump((train_x, train_y), pickle_out)
+    pickle_out.close()
 
-pickle_out = open(f"TRAIN_DATA/{SAVE_NAME}-v.pickle", "wb")
-pickle.dump((val_x, val_y), pickle_out)
-pickle_out.close()
+    pickle_out = open(f"TRAIN_DATA/{SAVE_NAME}-v.pickle", "wb")
+    pickle.dump((val_x, val_y), pickle_out)
+    pickle_out.close()
 
-print('...training data saved as: ')
-print(f'TRAIN_DATA/{SAVE_NAME}')
+    print('...training data saved as: ')
+    print(f'TRAIN_DATA/{SAVE_NAME}')
+
+
+
+
+
+
+intervals = ['1h']
+pasts = [100, 70, 50, 30, 20, 10]
+futures = [100, 70, 50, 30, 20, 10]
+pcts = [0.01, 0.02, 0.05]
+
+for interv in intervals:
+    for past in pasts:
+        for future in futures:
+            for pct in pcts:
+                INTERVAL = interv
+                PAST_SEQ_LEN = past
+                FUTURE_CHECK_LEN = future
+                TARGET_CHANGE = pct
+
+                time = round(time())
+                SAVE_NAME = f'{SYMBOL}{INTERVAL}-{PAST_SEQ_LEN}x{FUTURE_CHECK_LEN}~{TARGET_CHANGE}-normal-{time}'
+                log = Logger([time, SYMBOL, INTERVAL, PAST_SEQ_LEN, FUTURE_CHECK_LEN, TARGET_CHANGE]) 
+                main()
+
+                log.save(f'preprocess_log\\normal_1h_first.csv')
+                del log 
 

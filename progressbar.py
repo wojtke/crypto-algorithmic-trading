@@ -1,18 +1,16 @@
 class Progressbar:
-    def __init__(self, goal, steps=10, lenght=50, name=''):
+    def __init__(self, goal, steps=2, lenght=50, name=''):
         self.goal=goal
         self.steps=steps
         self.done=0
         self.name=name
         self.lenght = lenght
 
-        self.mod = int(goal/steps)
-
         self.step_size = goal/steps
 
 
     def update(self, i):
-        if i%self.mod==0:
+        if i%10==0:
             while i>=self.done*self.step_size:
                 self.message()
                 self.done+=1
