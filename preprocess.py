@@ -8,6 +8,7 @@ from collections import deque
 import random
 import numpy as np
 from time import time
+import os
 
 from log import Logger
 
@@ -20,8 +21,9 @@ FUTURE_CHECK_LEN = 50
 
 TARGET_CHANGE = 0.01
 
+SPECIAL_NAME = 'normal'
 
-SAVE_NAME = f'{SYMBOL}{INTERVAL}-{PAST_SEQ_LEN}x{FUTURE_CHECK_LEN}~{TARGET_CHANGE}-normal-{round(time())}'
+SAVE_NAME = f'{SYMBOL}{INTERVAL}-{PAST_SEQ_LEN}x{FUTURE_CHECK_LEN}~{TARGET_CHANGE}-{SPECIAL_NAME}'
 
 
 iv_sec = {'1m':60, '3m':60*3, '5m':60*5, 
@@ -129,16 +131,23 @@ def separate(df):
     df_t = pd.DataFrame()
     df_v = pd.DataFrame(data={"openTimestamp":[1337]}) #this is passed just for this df to have an index of 0, this row is later dropped
 
+
+
+    #too small timedelta on smaller intervals can cause problems
+
+    '''first try but i think its best to use freshest data possible
     #28 jan 2019 low volatility down ts 1548633600000
     #16 mar 2019 low volatility up  1552694400000
     #17 may 2019 high volatility up 1558051200000
     #14 aug 2019 high volatility down ts 1565740800000
+    windows = [ [parse_datetime("2019"+"01"+"28"), timedelta(days=8)],
+                [parse_datetime("2019"+"03"+"16"), timedelta(days=8)],
+                [parse_datetime("2019"+"05"+"16"), timedelta(days=8)],
+                [parse_datetime("2019"+"08"+"15"), timedelta(days=8)] ] 
+    '''
 
-    #too small timedelta on smaller intervals can cause problems
-    windows = [ [parse_datetime("2019"+"01"+"28"), timedelta(days=7)],
-                [parse_datetime("2019"+"03"+"16"), timedelta(days=7)],
-                [parse_datetime("2019"+"05"+"16"), timedelta(days=7)],
-                [parse_datetime("2019"+"08"+"15"), timedelta(days=7)] ] 
+    windows = [ [parse_datetime("2020"+"02"+"23"), timedelta(days=15)],
+                [parse_datetime("2020"+"04"+"10"), timedelta(days=15)], ]     
 
     end = df.iloc[-1]['openTimestamp']
 
@@ -199,7 +208,13 @@ def scale(df_t, df_v):
     print("Scaler means: ", scaler.mean_)
     print("Scaler scales: ", scaler.scale_)
 
-    pickle_out = open(f"scalers/{SAVE_NAME}-scaler_data.pickle", "wb")
+    try:
+        os.mkdir(f'scalers\\{date_str}')
+
+    except  FileExistsError:
+        pass
+
+    pickle_out = open(f"scalers\\{date_str}\\{SAVE_NAME}-scaler_data.pickle", "wb")
     pickle.dump([scaler.mean_, scaler.scale_], pickle_out)
     pickle_out.close()
     print(f'Saved the scaler')
@@ -304,41 +319,52 @@ def main():
 
 
     print('\nSaving training data...')
-    pickle_out = open(f"TRAIN_DATA/{SAVE_NAME}-t.pickle", "wb")
+
+    try:
+        os.mkdir(f'TRAIN_DATA\\{date_str}')
+
+    except  FileExistsError:
+        pass
+
+    pickle_out = open(f"TRAIN_DATA\\{date_str}\\{SAVE_NAME}-t.pickle", "wb")
     pickle.dump((train_x, train_y), pickle_out)
     pickle_out.close()
 
-    pickle_out = open(f"TRAIN_DATA/{SAVE_NAME}-v.pickle", "wb")
+    pickle_out = open(f"TRAIN_DATA\\{date_str}\\{SAVE_NAME}-v.pickle", "wb")
     pickle.dump((val_x, val_y), pickle_out)
     pickle_out.close()
 
     print('...training data saved as: ')
-    print(f'TRAIN_DATA/{SAVE_NAME}')
+    print(f'TRAIN_DATA/{date_str}/{SAVE_NAME}')
 
 
 
 
 
 
-intervals = ['1h']
-pasts = [100, 70, 50, 30, 20, 10]
-futures = [100, 70, 50, 30, 20, 10]
-pcts = [0.01, 0.02, 0.05]
+intervals = ['5m']
+pasts = [90, 50, 30]
+futures = [90, 50, 30]
+pcts = [0.01]
+
+date_str = datetime.now().strftime("%d.%m.%y")
+
 
 for interv in intervals:
     for past in pasts:
         for future in futures:
             for pct in pcts:
+
                 INTERVAL = interv
                 PAST_SEQ_LEN = past
                 FUTURE_CHECK_LEN = future
                 TARGET_CHANGE = pct
 
-                time = round(time())
-                SAVE_NAME = f'{SYMBOL}{INTERVAL}-{PAST_SEQ_LEN}x{FUTURE_CHECK_LEN}~{TARGET_CHANGE}-normal-{time}'
-                log = Logger([time, SYMBOL, INTERVAL, PAST_SEQ_LEN, FUTURE_CHECK_LEN, TARGET_CHANGE]) 
+                SAVE_NAME = f'{SYMBOL}{INTERVAL}-{PAST_SEQ_LEN}x{FUTURE_CHECK_LEN}~{TARGET_CHANGE}-{SPECIAL_NAME}'
+                print(f"\n\n ----- Preprocessing {SAVE_NAME} ----- ")
+                log = Logger([SYMBOL, INTERVAL, PAST_SEQ_LEN, FUTURE_CHECK_LEN, TARGET_CHANGE]) 
                 main()
 
-                log.save(f'preprocess_log\\normal_1h_first.csv')
+                log.save(f'preprocess_log\\{SPECIAL_NAME}-{date_str}.csv')
                 del log 
 

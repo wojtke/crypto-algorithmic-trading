@@ -1,5 +1,5 @@
 class Progressbar:
-    def __init__(self, goal, steps=2, lenght=50, name=''):
+    def __init__(self, goal, steps=5, lenght=50, name=''):
         self.goal=goal
         self.steps=steps
         self.done=0
@@ -16,6 +16,9 @@ class Progressbar:
                 self.done+=1
 
     def message(self):
+        bar = '[' + '='*round(self.done*self.lenght/self.steps) + '>' + '-'*(self.lenght-round(self.done*self.lenght/self.steps)) + ']'
+
+        '''    
         bar ='['
         for _ in range(round(self.done*self.lenght/self.steps)):
             bar+='='
@@ -23,6 +26,7 @@ class Progressbar:
         for _ in range(self.lenght-round(self.done*self.lenght/self.steps)):
             bar+= '-'
         bar+=']'
+        '''
 
         print(bar, self.name, round(100*self.done/self.steps), "%")
 
