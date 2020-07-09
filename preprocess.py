@@ -9,6 +9,7 @@ import random
 import numpy as np
 from time import time
 import os
+import ta
 
 from log import Logger
 
@@ -51,22 +52,52 @@ def load_raw_data():
 def classify(df): 
     print("Classifying data...")
 
-    leng = int(len(df.index) - FUTURE_CHECK_LEN)
+    leng = int(len(df.index) - FUTURE_CHECK_LEN) - 1
 
     counter = {"H":0, "L":0, "N":0, "B":0}
     classification = []
 
     pb = Progressbar(leng, name="Classification")
 
-    for i in range(leng): #mozna zoptymalizowac troche
-        high, low = classification_target(i)
+    if SPECIAL_NAME=='normal': #NORMALNE LICZENIE TARGETU JAKO PCT CHANGE
+        for i in range(leng): #mozna zoptymalizowac troche
+            high, low = classification_target(i)
 
-        counter_case, to_append = assign_classification(high, low, i)
-        classification.append(to_append)
-        counter[counter_case]+=1
+            counter_case, to_append = assign_classification(high, low, i+1)
+            classification.append(to_append)
+            counter[counter_case]+=1
 
-        pb.update(i)
+            pb.update(i)
 
+    elif SPECIAL_NAME=='stdev': #LICZENIE TARGETU PROPORCJONALNIE DO STDEV
+        df['stdev']=ta.volatility.bollinger_hband(close=df['close'], n=PAST_SEQ_LEN, ndev=0.5)-ta.volatility.bollinger_lband(close=df['close'], n=PAST_SEQ_LEN, ndev=0.5)
+        for i in range(leng): 
+            high = df["close"][i] + TARGET_CHANGE*df['stdev'][i]
+            low = df["close"][i] - TARGET_CHANGE*df['stdev'][i]
+
+            counter_case, to_append = assign_classification(high, low, i+1)
+            classification.append(to_append)
+            counter[counter_case]+=1
+
+            pb.update(i)
+        df.drop(columns=['stdev'], inplace=True)
+
+    elif SPECIAL_NAME == 'stdevcut':
+        df['stdev']=ta.volatility.bollinger_hband(close=df['close'], n=PAST_SEQ_LEN, ndev=0.5)-ta.volatility.bollinger_lband(close=df['close'], n=PAST_SEQ_LEN, ndev=0.5)
+        for i in range(leng): 
+            if df['stdev'][i]/df["close"][i]>=TARGET_CHANGE:
+                high = df["close"][i] + df['stdev'][i]
+                low = df["close"][i] - df['stdev'][i]
+
+                counter_case, to_append = assign_classification(high, low, i+1)
+                classification.append(to_append)
+                counter[counter_case]+=1
+            else:
+                classification.append(None)
+                counter["N"]+=1
+
+            pb.update(i)
+        df.drop(columns=['stdev'], inplace=True)
     del pb
 
     print(counter)
@@ -87,7 +118,6 @@ def classification_target(i):
     high = 
     low =
     '''
-
 
 def assign_classification(high, low, i):#
     for j in range(FUTURE_CHECK_LEN):
@@ -200,7 +230,7 @@ def scale(df_t, df_v):
     del features
 
     features = df_v[col_names]
-    scaler = preprocessing.StandardScaler().fit(features.values)
+    #scaler = preprocessing.StandardScaler().fit(features.values)
     df_v[col_names] = scaler.transform(features.values)
     del features
 
@@ -209,12 +239,12 @@ def scale(df_t, df_v):
     print("Scaler scales: ", scaler.scale_)
 
     try:
-        os.mkdir(f'scalers\\{date_str}')
+        os.mkdir(f'SCALERS\\{INTERVAL}-{SPECIAL_NAME}-{date_str}')
 
     except  FileExistsError:
         pass
 
-    pickle_out = open(f"scalers\\{date_str}\\{SAVE_NAME}-scaler_data.pickle", "wb")
+    pickle_out = open(f"SCALERS\\{INTERVAL}-{SPECIAL_NAME}-{date_str}\\{SAVE_NAME}-scaler_data.pickle", "wb")
     pickle.dump([scaler.mean_, scaler.scale_], pickle_out)
     pickle_out.close()
     print(f'Saved the scaler')
@@ -321,31 +351,31 @@ def main():
     print('\nSaving training data...')
 
     try:
-        os.mkdir(f'TRAIN_DATA\\{date_str}')
+        os.mkdir(f'TRAIN_DATA\\{INTERVAL}-{SPECIAL_NAME}-{date_str}')
 
     except  FileExistsError:
         pass
 
-    pickle_out = open(f"TRAIN_DATA\\{date_str}\\{SAVE_NAME}-t.pickle", "wb")
+    pickle_out = open(f"TRAIN_DATA\\{INTERVAL}-{SPECIAL_NAME}-{date_str}\\{SAVE_NAME}-t.pickle", "wb")
     pickle.dump((train_x, train_y), pickle_out)
     pickle_out.close()
 
-    pickle_out = open(f"TRAIN_DATA\\{date_str}\\{SAVE_NAME}-v.pickle", "wb")
+    pickle_out = open(f"TRAIN_DATA\\{INTERVAL}-{SPECIAL_NAME}-{date_str}\\{SAVE_NAME}-v.pickle", "wb")
     pickle.dump((val_x, val_y), pickle_out)
     pickle_out.close()
 
     print('...training data saved as: ')
-    print(f'TRAIN_DATA/{date_str}/{SAVE_NAME}')
+    print(f'TRAIN_DATA/{INTERVAL}-{SPECIAL_NAME}-{date_str}/{SAVE_NAME}')
 
 
 
 
 
 
-intervals = ['5m']
-pasts = [90, 50, 30]
-futures = [90, 50, 30]
-pcts = [0.01]
+intervals = ['15m']############
+pasts = [100]
+futures = [30]
+pcts = [0.5]
 
 date_str = datetime.now().strftime("%d.%m.%y")
 
@@ -358,13 +388,13 @@ for interv in intervals:
                 INTERVAL = interv
                 PAST_SEQ_LEN = past
                 FUTURE_CHECK_LEN = future
-                TARGET_CHANGE = pct
+                TARGET_CHANGE = pct/100
 
                 SAVE_NAME = f'{SYMBOL}{INTERVAL}-{PAST_SEQ_LEN}x{FUTURE_CHECK_LEN}~{TARGET_CHANGE}-{SPECIAL_NAME}'
                 print(f"\n\n ----- Preprocessing {SAVE_NAME} ----- ")
-                log = Logger([SYMBOL, INTERVAL, PAST_SEQ_LEN, FUTURE_CHECK_LEN, TARGET_CHANGE]) 
+                log = Logger([SYMBOL, INTERVAL, SPECIAL_NAME, PAST_SEQ_LEN, FUTURE_CHECK_LEN, TARGET_CHANGE]) 
                 main()
 
-                log.save(f'preprocess_log\\{SPECIAL_NAME}-{date_str}.csv')
+                log.save(f'PREP_LOG\\{INTERVAL}-{SPECIAL_NAME}-{date_str}.csv')
                 del log 
 

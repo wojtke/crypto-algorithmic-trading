@@ -1,5 +1,5 @@
 class Progressbar:
-    def __init__(self, goal, steps=5, lenght=50, name=''):
+    def __init__(self, goal, steps=20, lenght=60, name=''):
         self.goal=goal
         self.steps=steps
         self.done=0

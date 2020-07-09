@@ -5,6 +5,7 @@ import json
 import pandas as pd
 import os
 
+
 from datetime import datetime
 from binance.client import Client
 
@@ -16,7 +17,11 @@ intervals = ['1m','5m','15m','1h', '4h', '1d']
 
 def update_all():
 
-    create_dir("RAW_DATA")
+    try:#
+        os.makedirs(f"RAW_DATA")
+
+    except  FileExistsError:
+        pass
 
     for interval in intervals:
         for symbol in symbols:

@@ -14,5 +14,5 @@ class Logger():
 
     def save(self, path):
         with open(path, 'a+', newline='') as f:
-            writer = csv.writer(f)
+            writer = csv.writer(f, delimiter=";")
             writer.writerow(self.data)
