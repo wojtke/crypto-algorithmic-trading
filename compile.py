@@ -4,19 +4,19 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout, LSTM, BatchNormalization
 from tensorflow.keras.callbacks import TensorBoard, ModelCheckpoint, EarlyStopping, Callback
 import time
-import filename_parser
+from utils import FilenameParser
 import os
 import numpy as np
 from datetime import datetime
 
-EPOCHS = 20
+EPOCHS = 15
 BATCH_SIZE = 32
 NODES = 96
 DENSE = 16
 
-dataset_name = '15m-normal-05.07.20'
+dataset_name = '15m-normal-11.07.20'
 
-file_list = filename_parser.get_file_list(dataset_name)
+file_list = FilenameParser.get_file_list(dataset_name)
 
 class SavePredictions(Callback):
     def on_epoch_end(self, epoch, logs=None):
@@ -28,7 +28,7 @@ class SavePredictions(Callback):
         val_accuracy= logs["val_accuracy"] 
         
         predictions = model.predict(validation_x)
-        pickle_out = open(f"READY_PRED/{dataset_name}/{NAME}/"+"{:02d}-TL{:.3f}-TA{:.3f}_VL{:.3f}-VA{:.3f}.pickle".format(epoch, loss, accuracy, val_loss, val_accuracy), "wb")
+        pickle_out = open(f"READY_PRED/{dataset_name}/{NAME}/"+"{:02d}-TL{:.3f}-TA{:.3f}_VL{:.3f}-VA{:.3f}.pickle".format(epoch+1, loss, accuracy, val_loss, val_accuracy), "wb")
         pickle.dump(predictions, pickle_out)
         pickle_out.close()
         print(f'Saved predictions')
@@ -73,7 +73,7 @@ for filename in file_list:
     model.add(Dense(2, activation='softmax'))
 
 
-    opt = tf.keras.optimizers.Adam(lr=0.00015)
+    opt = tf.keras.optimizers.Adam(lr=0.0001)
 
     model.compile(
             loss='sparse_categorical_crossentropy',
@@ -124,3 +124,4 @@ for filename in file_list:
             callbacks=[tensorboard, checkpoint, save_callback],
             )
 
+    
