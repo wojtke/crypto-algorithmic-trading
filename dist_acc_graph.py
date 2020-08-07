@@ -1,13 +1,14 @@
-from tensorflow.keras.models import load_model
 import pickle 
-from numpy import argmax
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import os
+from numpy import argmax
+
+from data_processing import Preprocessor
 
 
 
-MODEL = '15m-normal-09.07.20/BTCUSDT15m-100x50~0.006999999999999999-normal-09Jul20-13.55.18/09-TL0.681-TA0.557_VL0.686-VA0.549.model'
+MODEL = '15m-normal-11.07.20/BTCUSDT15m-100x50~0.01-normal-11Jul20-17.59.26/07-TL0.679-TA0.564_VL0.687-VA0.563.model'
 
 MODEL_PATH = "D:/PROJEKTY/Python/ML risk analysis/MODELS/" + MODEL
 TEST_PATH = "D:/PROJEKTY/Python/ML risk analysis/TRAIN_DATA/" + MODEL[:-58] +'-v.pickle'
@@ -17,8 +18,8 @@ FOLDER = "15m-normal-11.07.20/BTCUSDT15m-100x50~0.02-normal-11Jul20-18.42.51"
 div = 50
 
 def main():
-    #graph(MODEL_PATH, TEST_PATH, name=MODEL)
-    many_graphs(FOLDER, "VA", 0.54, mode="max")
+    graph(MODEL)
+    #many_graphs(FOLDER, "VA", 0.54, mode="max")
 
 def many_graphs(FOLDER, thing="VL", value=0.7, mode="min"):
     DIR = "D:/PROJEKTY/Python/ML risk analysis/MODELS/" + FOLDER
@@ -41,30 +42,23 @@ def many_graphs(FOLDER, thing="VL", value=0.7, mode="min"):
         print(MODEL_PATH)
         print(TEST_PATH)
 
-        graph(MODEL_PATH, TEST_PATH, name=FOLDER + model_name)
+        graph(MODEL)
 
 
-def czy_poprawne(entry, val):
-    if argmax(entry) == val:
-        return True
-    else:
-        return False
 
+def graph(MODEL):
+    preprocessor = Preprocessor(symbol='BTC', interval='15m', MODEL=MODEL, WINDOWS = None)
+    
+    preprocessor.repreprocess()
 
-def graph(MODEL_PATH, TEST_PATH, name):
-    model = load_model(MODEL_PATH, compile=False)
-
-
-    with open(TEST_PATH , 'rb') as pickle_in:
-        validation_x, validation_y = pickle.load(pickle_in)
-
-    prediction = model.predict([validation_x])
-    print(prediction)
-
-
-    right=[]
-    for i, entry in enumerate(prediction):
-        right.append(czy_poprawne(entry, validation_y[i]))
+    pred_bool=[]
+    for pred, ts, target in preprocessor.pred_df.values:
+        if target == round(pred):
+                pred_bool.append(True)
+        elif target + round(pred)==1:
+            pred_bool.append(False)
+        else:
+            pred_bool.append(None)
 
     #inicjalizacja array
     distribution = [0] * div
@@ -75,10 +69,10 @@ def graph(MODEL_PATH, TEST_PATH, name):
     aggregate_distribution_threshhold = [0] * int(div/2)
 
     #proste rozłożenie
-    for i in range(len(right)):
-        place = int(prediction[i][0]*div)
+    for i in range(len(pred_bool)):
+        place = int(preprocessor.pred_df['preds'].values[i]*div)
         distribution[place]+=1
-        if right[i]:
+        if pred_bool[i]:
             accuracy[place]+=1
 
     #rozłożenie progowe lewej strony
@@ -132,8 +126,7 @@ def graph(MODEL_PATH, TEST_PATH, name):
 
     fig = make_subplots(rows=1, cols=2, 
                         column_widths=[0.5, 0.5], 
-                        horizontal_spacing=0.07,
-                        specs=[[{}, {}]])
+                        horizontal_spacing=0.07,)
 
 
     fig.add_trace(
@@ -203,7 +196,7 @@ def graph(MODEL_PATH, TEST_PATH, name):
                 
 
     fig.update_layout(
-        title=name,
+        title=MODEL,
         legend_orientation="h",
         xaxis = dict(
             tickmode = 'linear',

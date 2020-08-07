@@ -6,29 +6,34 @@ import pickle
 from collections import deque
 from utils import Progressbar
 import os
+from sklearn import preprocessing
+from vars import Vars
 
 class Preprocessor:
-    def __init__(self, symbol, interval, MODEL, WINDOWS):
+    def __init__(self, SYMBOL=None, INTERVAL=None, WINDOWS=None):
+        if not SYMBOL:
+            self.SYMBOL = Vars.SYMBOL
+        else:
+            self.SYMBOL = SYMBOL
 
-        self.klines_path = f'D:/PROJEKTY/Python/BINANCE_RAW_DATA/Binance_{symbol}USDT_{interval}.json'
+        if not INTERVAL:
+            self.INTERVAL = Vars.INTERVAL
+        else:
+            self.INTERVAL = INTERVAL
 
-        self.MODEL_PATH = "D:/PROJEKTY/Python/ML risk analysis/MODELS/" + MODEL
-        self.SCALER_PATH = "D:/PROJEKTY/Python/ML risk analysis/SCALERS/" + MODEL[:-58] + '-scaler_data.pickle'
-        self.READY_PRED_PATH = "D:/PROJEKTY/Python/ML risk analysis/READY_PRED/" + MODEL[:-5] + 'pickle'
+        if not WINDOWS:
+            self.WINDOWS = Vars.WINDOWS
+        else:
+            self.WINDOWS = WINDOWS
 
+        self.klines_path = f'D:/PROJEKTY/Python/BINANCE_RAW_DATA/Binance_{self.SYMBOL}USDT_{self.INTERVAL}.json' #VARS
 
-        self.TARGET_CHANGE = 0.01
-        self.FUTURE_CHECK_LEN = 50
-        self.PAST_SEQ_LEN = 100
-
-        self.klines = None
-
-
-        self.WINDOWS = [ [parse_datetime("2020"+"02"+"23"), timedelta(days=15)],
-                         [parse_datetime("2020"+"04"+"10"), timedelta(days=15)], ] 
+        self.klines = pd.DataFrame()
 
 
-    def repreprocess(self, do_not_use_ready=False):
+    def repreprocess(self, MODEL, do_not_use_ready=False):
+        self.read_model_details(MODEL)
+
         try:
             self.pred_df = pickle.load(open( self.READY_PRED_PATH, "rb" ))
             print("Ready saved predictions found!\n")
@@ -39,8 +44,9 @@ class Preprocessor:
 
         except:
             print("Repreprocessing shit...")
-            if not self.klines:
-                self.klines = self.data_load()
+            if self.klines.empty:
+
+                self.klines_load()
 
             df = self.data_to_pct(self.klines.copy())
 
@@ -56,22 +62,83 @@ class Preprocessor:
             self.save_ready_preds()
             print("...shit repreprocessed and saved")
 
+    
+    def preprocess(self, TARGET_CHANGE, PAST_SEQ_LEN, FUTURE_CHECK_LEN, SPECIAL_NAME):
 
-    def data_load(self):
-        print("Loading data...")
+        self.TARGET_CHANGE = TARGET_CHANGE
+        self.PAST_SEQ_LEN = PAST_SEQ_LEN
+        self.FUTURE_CHECK_LEN = FUTURE_CHECK_LEN
+        self.SPECIAL_NAME = SPECIAL_NAME
+
+        self.SAVE_NAME = f'{self.SYMBOL}{self.INTERVAL}-{PAST_SEQ_LEN}x{FUTURE_CHECK_LEN}~{TARGET_CHANGE}'
+        
+        self.date_str = datetime.now().strftime("%d.%m.%y")
+
+        # logging and shit
+
+        self.klines_load(load_all=True)
+
+        df = self.data_to_pct(self.klines.copy())
+
+        df_t, df_v = self.preprocess_separate(df, self.WINDOWS)
+        del df
+
+        df_t = self.data_scale(df_t, from_saved_scaler=False)
+        df_v = self.data_scale(df_v, from_saved_scaler=True)
+
+        train_x, train_y = self.preprocess_create_seqs(df_t, "train")
+        del df_t
+
+        val_x, val_y = self.preprocess_create_seqs(df_v, 'val')
+        del df_v
+
+        print('--------------------------------------')
+        print(f"Train data len: {len(train_y)}, Validation data len: {len(val_y)}")
+        print(f"TRAIN:   Sells: {train_y.count(0)}, Buys: {train_y.count(1)}")
+        print(f"TEST:    Sells: {val_y.count(0)}, Buys: {val_y.count(1)}")
+        print(f"Validation is {round(100 * len(val_y) / (len(val_y) + len(train_y)), 2)}% of all data")
+
+        #log.log(f"{round(100 * len(val_y) / (len(val_y) + len(train_y)), 2)}%")
+
+        self.save_train_and_val(train_x, train_y, val_x, val_y)
+    
+
+    def read_model_details(self, MODEL):
+        self.MODEL_PATH = "D:/PROJEKTY/Python/ML risk analysis/MODELS/" + MODEL
+        self.SCALER_PATH = "D:/PROJEKTY/Python/ML risk analysis/SCALERS/" + MODEL[:-58] + '-scaler_data.pickle'
+        self.READY_PRED_PATH = "D:/PROJEKTY/Python/ML risk analysis/READY_PRED/" + MODEL[:-5] + 'pickle'
+
+        ix = MODEL.find('~')+1
+        self.TARGET_CHANGE = float(MODEL[ix:MODEL.find('-', ix)])
+
+        self.FUTURE_CHECK_LEN = int(MODEL[MODEL.find('x')+1:ix-1])
+
+        ix=MODEL[MODEL.find('x')-1::-1].find('-')
+        self.PAST_SEQ_LEN = int(MODEL[MODEL.find('x')-ix:MODEL.find('x')])
+
+        self.SYMBOL = MODEL[MODEL.find('/')+1:MODEL.find('USDT')]
+
+        self.INTERVAL = MODEL[MODEL.find('USDT')+4:MODEL.find('x')-ix-1]
+
+
+    def klines_load(self, load_all=False):
+        print("Loading klines...")
 
         klines_uncut = pd.read_json(self.klines_path)
         klines = pd.DataFrame()
 
-        for w in self.WINDOWS: 
-            ts1 = 1000*datetime.timestamp(w[0] - w[1])
-            ts2 = 1000*datetime.timestamp(w[0] + w[1])
-            a = np.array(klines_uncut.loc[klines_uncut[0].isin([ts1, ts2])].index)
+        if not load_all:
+            for w in self.WINDOWS: 
+                ts1 = 1000*datetime.timestamp(w[0] - w[1])
+                ts2 = 1000*datetime.timestamp(w[0] + w[1])
+                a = np.array(klines_uncut.loc[klines_uncut[0].isin([ts1, ts2])].index)
 
-            if klines.empty:
-                klines = klines_uncut.iloc[a[0]:a[1]]
-            else:
-                klines = klines.append(klines_uncut.iloc[a[0]:a[1]])
+                if klines.empty:
+                    klines = klines_uncut.iloc[a[0]:a[1]]
+                else:
+                    klines = klines.append(klines_uncut.iloc[a[0]:a[1]])
+        else:
+            klines = klines_uncut
 
 
         klines = klines[[0,1,2,3,4,5]]
@@ -79,10 +146,12 @@ class Preprocessor:
 
         for c in klines.columns:
             klines[c] = pd.to_numeric(klines[c], errors='coerce')
-        #df = df.reset_index()
-        #df = df.drop(columns=["index"])
-
-        print("...loading done\n")
+        '''
+        df = df.reset_index()
+        df = df.drop(columns=["index"])
+        '''
+        self.klines = klines
+        print("...klines loaded\n")
         return klines
 
 
@@ -108,11 +177,31 @@ class Preprocessor:
         return df
 
 
-    def data_scale(self, df):
+    def data_scale(self, df, from_saved_scaler=True):
         print("Scaling data...")
 
-        pickle_scaler_data = pickle.load( open( self.SCALER_PATH, "rb" ) )
-        print(pickle_scaler_data)
+        if from_saved_scaler:
+            pickle_scaler_data = pickle.load( open( self.SCALER_PATH, "rb" ) )
+            print(pickle_scaler_data)
+        else:
+            scaler = preprocessing.StandardScaler().fit(df.values)
+            df = scaler.transform(df.values)
+
+            print("Scaler means: ", scaler.mean_)
+            print("Scaler scales: ", scaler.scale_)
+
+            try:
+                os.makedirs(f'SCALERS/{self.INTERVAL}-{self.SPECIAL_NAME}-{self.date_str}')
+
+            except  FileExistsError:
+                pass
+
+            self.SCALER_PATH = f"SCALERS/{self.INTERVAL}-{self.SPECIAL_NAME}-{self.date_str}/{self.SAVE_NAME}-scaler_data.pickle"
+
+            pickle_out = open(self.SCALER_PATH, "wb")
+            pickle.dump([scaler.mean_, scaler.scale_], pickle_out)
+            pickle_out.close()
+            print(f'Saved the scaler')
 
         i=0
         for col in df.columns: 
@@ -157,8 +246,6 @@ class Preprocessor:
         print("...creating sequences done\n")
         return np.array(seqs), ts, target, pred_index
 
-    def data_target(self, df):
-        pass
 
     def data_predict(self, seqs):
         print("Loading model and getting predictions...")
@@ -208,9 +295,7 @@ class Preprocessor:
         high = (1 + self.TARGET_CHANGE)*self.klines['close'][i]
         low = (1 - self.TARGET_CHANGE)*self.klines['close'][i]
 
-
         i+=1
-
         for j in range(self.FUTURE_CHECK_LEN):
             try:
                 is_high = self.klines['high'][i+j]>=high
@@ -241,4 +326,121 @@ class Preprocessor:
         pickle.dump(self.pred_df, pickle_out)
         pickle_out.close()
         print("...saved\n")
-            
+        
+
+    def preprocess_separate(self, df):
+        print("Separating data...")
+
+        df_t = pd.DataFrame()
+        df_v = pd.DataFrame(data={
+            "openTimestamp": [1337]})  # this is passed just for this df to have an index of 0, this row is later dropped
+
+        end = df.iloc[-1]['openTimestamp']
+
+        for window in self.WINDOWS:
+            ixs = index_window(end, window[0], window[1])
+
+            # parts of train set and val set overlap by 1 row, should not be a major leak problem,
+            # but if it is, it needs to be fixed
+            df_t = df_t.append(df.iloc[df_v.index[-1]:ixs[0] + 1])
+            df_v = df_v.append(df.iloc[ixs[0]:ixs[1] + 1])
+
+            print(datetime.fromtimestamp(df['openTimestamp'][ixs[0]] / 1000), "-",
+                  datetime.fromtimestamp(df['openTimestamp'][ixs[1]] / 1000))
+            print(f"Val window of {ixs[1] - ixs[0]} candles")
+
+        df_t = df_t.append(df.iloc[df_v.index[-1]:df.index[-1]])
+        df_v = df_v.drop([0])
+
+        print(f"\nTrain set candles: {len(df_t.index)}")
+        print(f"Validation set candles: {len(df_v.index)}")
+        print(f"Val: {round(100 * len(df_v.index) / len(df), 2)} %")
+
+        # droppin and cleaning
+        df_t.drop(columns=['openTimestamp'], inplace=True)
+        df_v.drop(columns=['openTimestamp'], inplace=True)
+
+        print("...separating done\n")
+        return df_t, df_v
+
+
+    def preprocess_create_seqs(self, df, which):
+        print(f"Creating {which} sequences...")
+
+        sliding_window = deque(maxlen=PAST_SEQ_LEN)
+
+        # it is easier to split between two to balance out later
+        buys = []
+        sells = []
+
+        pb = Progressbar(len(df.index), name="Sequentialisation")
+
+        for i in range(len(df.index)-1): 
+
+            sliding_window.append(df.values[i]) #adds single row of everything 
+
+            if len(sliding_window) == self.PAST_SEQ_LEN: #when sliding window is of desired length
+                classification = self.assign_classification(df.index[i])
+                if classification == 0:
+                    sells.append([np.array(sliding_window), classification])
+                elif classification == 1:
+                    buys.append([np.array(sliding_window), classification])
+
+            if df.index[i]+1!=df.index[i+1]:
+                sliding_window.clear()
+
+            pb.update(i)
+        del pb
+ 
+        random.shuffle(buys)
+        random.shuffle(sells)
+
+        pct_buys = round(100 * len(buys) / (len(buys) + len(sells)))
+        print(f'Created {which} seqs, ({len(buys)} buys, {len(sells)} sells - {pct_buys}%/{100 - pct_buys}%)')
+
+        lower = min(len(buys), len(sells))
+
+        buys = buys[:lower]
+        sells = sells[:lower]
+
+        print(f'Equalized both {which} buys/sells to {lower}')
+
+        sequential_data = buys + sells
+        del buys
+        del sells
+
+        random.shuffle(sequential_data)  # shuffle again
+
+        X = []
+        y = []
+        for seq, target in sequential_data:
+            X.append(seq)
+            y.append(target)
+
+        print(f'Returning {which} sequences ({len(y)})')
+        log.log(len(y))
+
+        print(f"...creating {which} sequences done\n")
+        return np.array(X), y
+
+
+    def save_train_and_val(self, train_x, train_y, val_x, val_y):
+        print('\nSaving training and validation data...')
+
+        try:
+            os.makedirs(f'TRAIN_DATA/{self.INTERVAL}-{self.SPECIAL_NAME}-{self.date_str}')
+
+        except  FileExistsError:
+            pass
+
+        pickle_out = open(f"TRAIN_DATA/{self.INTERVAL}-{self.SPECIAL_NAME}-{self.date_str}/{self.SAVE_NAME}-t.pickle", "wb")
+        pickle.dump((train_x, train_y), pickle_out)
+        pickle_out.close()
+
+        pickle_out = open(f"TRAIN_DATA/{self.INTERVAL}-{self.SPECIAL_NAME}-{self.date_str}/{self.SAVE_NAME}-v.pickle", "wb")
+        pickle.dump((val_x, val_y), pickle_out)
+        pickle_out.close()
+
+        print('...training data saved as: ')
+        print(f'TRAIN_DATA/{self.INTERVAL}-{self.SPECIAL_NAME}-{self.date_str}/{self.SAVE_NAME}')
+    
