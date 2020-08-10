@@ -243,6 +243,7 @@ def scale(df_t, df_v):
     scaler = preprocessing.StandardScaler().fit(features.values)
     df_t[col_names] = scaler.transform(features.values)
     del features
+    print(df_t)
 
     features = df_v[col_names]
     # scaler = preprocessing.StandardScaler().fit(features.values)

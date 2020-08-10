@@ -23,10 +23,10 @@ def main():
     preprocessor.klines_load()
 
     graph(MODEL, preprocessor, name=MODEL)
-    #many_graphs(FOLDER, thing="VL", value=0.69, mode="min")
+    #many_graphs(FOLDER, preprocessor, thing="VL", value=0.69, mode="min")
 
 
-def many_graphs(FOLDER, thing="VL", value=0.7, mode="min"):
+def many_graphs(FOLDER, preprocessor, thing="VL", value=0.7, mode="min"):
     DIR = "D:/PROJEKTY/Python/ML risk analysis/MODELS/" + FOLDER
     arr=[]
     if mode=="min":
@@ -44,7 +44,7 @@ def many_graphs(FOLDER, thing="VL", value=0.7, mode="min"):
         MODEL = FOLDER + model_name
         print(MODEL)
 
-        graph(MODEL, name=MODEL)    
+        graph(MODEL, preprocessor, name=MODEL)    
 
 
 def chart_candlestick(fig, preprocessor):

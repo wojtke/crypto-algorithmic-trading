@@ -14,7 +14,7 @@ BATCH_SIZE = 32
 NODES = 96
 DENSE = 16
 
-dataset_name = '15m-normal-11.07.20'
+dataset_name = '15m-new-10.08.20'
 
 file_list = FilenameParser.get_file_list(dataset_name)
 

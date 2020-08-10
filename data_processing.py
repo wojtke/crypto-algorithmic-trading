@@ -8,6 +8,7 @@ from utils import Progressbar
 import os
 from sklearn import preprocessing
 from vars import Vars
+import random
 
 class Preprocessor:
     def __init__(self, SYMBOL=None, INTERVAL=None, WINDOWS=None):
@@ -63,7 +64,7 @@ class Preprocessor:
             print("...shit repreprocessed and saved")
 
     
-    def preprocess(self, TARGET_CHANGE, PAST_SEQ_LEN, FUTURE_CHECK_LEN, SPECIAL_NAME):
+    def preprocess(self, TARGET_CHANGE, PAST_SEQ_LEN, FUTURE_CHECK_LEN, SPECIAL_NAME, date_str):
 
         self.TARGET_CHANGE = TARGET_CHANGE
         self.PAST_SEQ_LEN = PAST_SEQ_LEN
@@ -72,15 +73,15 @@ class Preprocessor:
 
         self.SAVE_NAME = f'{self.SYMBOL}{self.INTERVAL}-{PAST_SEQ_LEN}x{FUTURE_CHECK_LEN}~{TARGET_CHANGE}'
         
-        self.date_str = datetime.now().strftime("%d.%m.%y")
+        self.date_str = date_str
 
-        # logging and shit
+        print(f"\n\n ----- Preprocessing {self.SAVE_NAME} ----- ")
 
         self.klines_load(load_all=True)
 
         df = self.data_to_pct(self.klines.copy())
 
-        df_t, df_v = self.preprocess_separate(df, self.WINDOWS)
+        df_t, df_v = self.preprocess_separate(df)
         del df
 
         df_t = self.data_scale(df_t, from_saved_scaler=False)
@@ -182,13 +183,15 @@ class Preprocessor:
 
         if from_saved_scaler:
             pickle_scaler_data = pickle.load( open( self.SCALER_PATH, "rb" ) )
-            print(pickle_scaler_data)
+
+            mean = pickle_scaler_data[0]
+            scale =pickle_scaler_data[1]
+
         else:
             scaler = preprocessing.StandardScaler().fit(df.values)
-            df = scaler.transform(df.values)
 
-            print("Scaler means: ", scaler.mean_)
-            print("Scaler scales: ", scaler.scale_)
+            mean = scaler.mean_
+            scale = scaler.scale_
 
             try:
                 os.makedirs(f'SCALERS/{self.INTERVAL}-{self.SPECIAL_NAME}-{self.date_str}')
@@ -203,10 +206,13 @@ class Preprocessor:
             pickle_out.close()
             print(f'Saved the scaler')
 
+
+        print("Scaler means: ", mean)
+        print("Scaler scales: ", scale)
         i=0
         for col in df.columns: 
             if col != "openTimestamp":
-                df[col] = df[col].sub(pickle_scaler_data[0][i]).div(pickle_scaler_data[1][i])
+                df[col] = df[col].sub(mean[i]).div(scale[i])
                 i+=1
 
         print("...scaling done\n")
@@ -335,19 +341,19 @@ class Preprocessor:
         df_v = pd.DataFrame(data={
             "openTimestamp": [1337]})  # this is passed just for this df to have an index of 0, this row is later dropped
 
-        end = df.iloc[-1]['openTimestamp']
-
-        for window in self.WINDOWS:
-            ixs = index_window(end, window[0], window[1])
+        for w in self.WINDOWS:
+            ts1 = 1000*datetime.timestamp(w[0] - w[1])
+            ts2 = 1000*datetime.timestamp(w[0] + w[1])
+            a = np.array(self.klines.loc[self.klines['openTimestamp'].isin([ts1, ts2])].index)
 
             # parts of train set and val set overlap by 1 row, should not be a major leak problem,
             # but if it is, it needs to be fixed
-            df_t = df_t.append(df.iloc[df_v.index[-1]:ixs[0] + 1])
-            df_v = df_v.append(df.iloc[ixs[0]:ixs[1] + 1])
+            df_t = df_t.append(df.iloc[df_v.index[-1]:a[0] + 1])
+            df_v = df_v.append(df.iloc[a[0]:a[1] + 1])
 
-            print(datetime.fromtimestamp(df['openTimestamp'][ixs[0]] / 1000), "-",
-                  datetime.fromtimestamp(df['openTimestamp'][ixs[1]] / 1000))
-            print(f"Val window of {ixs[1] - ixs[0]} candles")
+            print(datetime.fromtimestamp(df['openTimestamp'][a[0]] / 1000), "-",
+                  datetime.fromtimestamp(df['openTimestamp'][a[1]] / 1000))
+            print(f"Val window of {a[1] - a[0]} candles")
 
         df_t = df_t.append(df.iloc[df_v.index[-1]:df.index[-1]])
         df_v = df_v.drop([0])
@@ -367,7 +373,7 @@ class Preprocessor:
     def preprocess_create_seqs(self, df, which):
         print(f"Creating {which} sequences...")
 
-        sliding_window = deque(maxlen=PAST_SEQ_LEN)
+        sliding_window = deque(maxlen=self.PAST_SEQ_LEN)
 
         # it is easier to split between two to balance out later
         buys = []
@@ -418,7 +424,7 @@ class Preprocessor:
             y.append(target)
 
         print(f'Returning {which} sequences ({len(y)})')
-        log.log(len(y))
+        #log.log(len(y))
 
         print(f"...creating {which} sequences done\n")
         return np.array(X), y

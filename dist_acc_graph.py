@@ -10,18 +10,20 @@ from data_processing import Preprocessor
 
 MODEL = '15m-normal-11.07.20/BTCUSDT15m-100x50~0.01-normal-11Jul20-17.59.26/07-TL0.679-TA0.564_VL0.687-VA0.563.model'
 
-MODEL_PATH = "D:/PROJEKTY/Python/ML risk analysis/MODELS/" + MODEL
-TEST_PATH = "D:/PROJEKTY/Python/ML risk analysis/TRAIN_DATA/" + MODEL[:-58] +'-v.pickle'
-
 FOLDER = "15m-normal-11.07.20/BTCUSDT15m-100x50~0.02-normal-11Jul20-18.42.51"
+if FOLDER[-1]!="/":
+    FOLDER+="/"
 
 div = 50
 
 def main():
-    graph(MODEL)
-    #many_graphs(FOLDER, "VA", 0.54, mode="max")
+    preprocessor = Preprocessor()
+    preprocessor.klines_load()
 
-def many_graphs(FOLDER, thing="VL", value=0.7, mode="min"):
+    graph(MODEL, preprocessor, name=MODEL)
+    #many_graphs(FOLDER, preprocessor, thing="VL", value=0.69, mode="min")
+
+def many_graphs(FOLDER, preprocessor, thing="VL", value=0.7, mode="min"):
     DIR = "D:/PROJEKTY/Python/ML risk analysis/MODELS/" + FOLDER
     arr=[]
     if mode=="min":
@@ -36,20 +38,14 @@ def many_graphs(FOLDER, thing="VL", value=0.7, mode="min"):
                     arr.append(d)
 
     for model_name in arr:
-        print(model_name)
-        MODEL_PATH = "D:/PROJEKTY/Python/ML risk analysis/MODELS/" + FOLDER + model_name
-        TEST_PATH = "D:/PROJEKTY/Python/ML risk analysis/TRAIN_DATA/" + FOLDER[:-18] +'-v.pickle'
-        print(MODEL_PATH)
-        print(TEST_PATH)
-
-        graph(MODEL)
+        MODEL = FOLDER + model_name
+        print(MODEL)
+        graph(MODEL, preprocessor, name=MODEL)    
 
 
 
-def graph(MODEL):
-    preprocessor = Preprocessor(symbol='BTC', interval='15m', MODEL=MODEL, WINDOWS = None)
-    
-    preprocessor.repreprocess()
+def graph(MODEL, preprocessor, name):
+    preprocessor.repreprocess(MODEL)
 
     pred_bool=[]
     for pred, ts, target in preprocessor.pred_df.values:
@@ -196,7 +192,7 @@ def graph(MODEL):
                 
 
     fig.update_layout(
-        title=MODEL,
+        title=name,
         legend_orientation="h",
         xaxis = dict(
             tickmode = 'linear',
