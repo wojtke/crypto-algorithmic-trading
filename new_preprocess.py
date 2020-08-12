@@ -5,8 +5,8 @@ SYMBOL = 'BTC'
 INTERVAL = '15m'
 WINDOWS = None #default
 
-pasts = [150]
-futures = [75]
+pasts = [200]
+futures = [100]
 target_pct = [0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 1, 1.2, 1.5, 2]
 target_pct = [1]
 

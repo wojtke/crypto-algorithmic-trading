@@ -12,27 +12,11 @@ from datetime import datetime
 EPOCHS = 15
 BATCH_SIZE = 32
 NODES = 96
-DENSE = 16
+DENSE = 20
 
-dataset_name = '15m-new-10.08.20'
+dataset_name = '15m-new-10.08.20/q'
 
 file_list = FilenameParser.get_file_list(dataset_name)
-
-class SavePredictions(Callback):
-    def on_epoch_end(self, epoch, logs=None):
-        print(f'Generating predictons on val set')
-
-        loss = logs["loss"]
-        accuracy = logs["accuracy"]
-        val_loss= logs["val_loss"]
-        val_accuracy= logs["val_accuracy"] 
-        
-        predictions = model.predict(validation_x)
-        pickle_out = open(f"READY_PRED/{dataset_name}/{NAME}/"+"{:02d}-TL{:.3f}-TA{:.3f}_VL{:.3f}-VA{:.3f}.pickle".format(epoch+1, loss, accuracy, val_loss, val_accuracy), "wb")
-        pickle.dump(predictions, pickle_out)
-        pickle_out.close()
-        print(f'Saved predictions')
-        
 
 for filename in file_list:
 
@@ -73,7 +57,7 @@ for filename in file_list:
     model.add(Dense(2, activation='softmax'))
 
 
-    opt = tf.keras.optimizers.Adam(lr=0.0001)
+    opt = tf.keras.optimizers.Adam(lr=0.00005)
 
     model.compile(
             loss='sparse_categorical_crossentropy',
@@ -92,19 +76,14 @@ for filename in file_list:
     except  FileExistsError:
         pass
 
+    '''
     #szybkie zatrzymywanie
     early_stopping = tf.keras.callbacks.EarlyStopping(
             monitor="val_loss",
             patience=5,
             mode="min",
             restore_best_weights=True)
-
-    #moj callback zeby zapisalo mi predykcje na testowe dane, potem sobie je analizuje
-    save_callback = SavePredictions()
-    try:
-        os.makedirs(f"READY_PRED/{dataset_name}/{NAME}")
-    except  FileExistsError:
-        pass
+    '''
 
     #proste zapisanie w txt ustawien, tak zeby mi bylo wygodnie je na szybko przeczytac
     f = open(f"MODELS/{dataset_name}/{NAME}/details.txt", "w")
@@ -121,7 +100,7 @@ for filename in file_list:
             verbose=2,
             batch_size=BATCH_SIZE,
             validation_data=(validation_x, validation_y),
-            callbacks=[tensorboard, checkpoint, save_callback],
+            callbacks=[tensorboard, checkpoint],
             )
 
     

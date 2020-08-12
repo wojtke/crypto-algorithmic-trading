@@ -27,7 +27,7 @@ class Preprocessor:
         else:
             self.WINDOWS = WINDOWS
 
-        self.klines_path = f'D:/PROJEKTY/Python/BINANCE_RAW_DATA/Binance_{self.SYMBOL}USDT_{self.INTERVAL}.json' #VARS
+        self.klines_path = f'D:/PROJEKTY/Python/ML risk analysis/RAW_DATA/Binance_{self.SYMBOL}USDT_{self.INTERVAL}.json' #VARS
 
         self.klines = pd.DataFrame()
 
@@ -71,11 +71,11 @@ class Preprocessor:
         self.FUTURE_CHECK_LEN = FUTURE_CHECK_LEN
         self.SPECIAL_NAME = SPECIAL_NAME
 
-        self.SAVE_NAME = f'{self.SYMBOL}{self.INTERVAL}-{PAST_SEQ_LEN}x{FUTURE_CHECK_LEN}~{TARGET_CHANGE}'
+        self.SAVE_NAME = f'{self.SYMBOL}"USDT"{self.INTERVAL}-{PAST_SEQ_LEN}x{FUTURE_CHECK_LEN}~{TARGET_CHANGE}'
         
         self.date_str = date_str
 
-        print(f"\n\n ----- Preprocessing {self.SAVE_NAME} ----- ")
+        print(f"\n ----- Preprocessing {self.SAVE_NAME} ----- ")
 
         self.klines_load(load_all=True)
 
@@ -124,6 +124,7 @@ class Preprocessor:
 
     def klines_load(self, load_all=False):
         print("Loading klines...")
+        print(self.klines_path)
 
         klines_uncut = pd.read_json(self.klines_path)
         klines = pd.DataFrame()

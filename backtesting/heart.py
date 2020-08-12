@@ -25,6 +25,7 @@ class Account():
         self.FEE = FEE
         self.liq_bump = liq_bump
 
+        self.start_balance = start_balance
         self.balance = start_balance
         self.position = 0
         self.pos_fee = 0
@@ -40,16 +41,14 @@ class Account():
         self.k_i = kline_limit
         self.kline_limit = kline_limit
 
-        klines_path = f'D:/PROJEKTY/Python/BINANCE_RAW_DATA/Binance_{symbol}USDT_{interval}.json'
+        preprocessor = Preprocessor(self.symbol, self.interval)
+            
 
-        self.klines = pd.DataFrame()
+        self.klines = preprocessor.klines_load()
+        preprocessor.repreprocess(self.MODEL)
 
+        self.pred_df = preprocessor.pred_df
 
-        WINDOWS = [ [parse_datetime("2020"+"02"+"23"), timedelta(days=15)],
-                    [parse_datetime("2020"+"04"+"10"), timedelta(days=15)], ] 
-
-    
-        self.klines, self.pred_df = self.get_data(klines_path, WINDOWS)
 
 
         #self.klines = self.klines.reset_index()
@@ -58,17 +57,9 @@ class Account():
         print(f"Loaded klines starting from {datetime.fromtimestamp(int(self.klines.values[0][0])/1000)}"
             + f" ending on {datetime.fromtimestamp(int(self.klines.values[-1][0]/1000))}")
 
-    def get_data(self, klines_path, WINDOWS):
-        preprocessor = Preprocessor(self.symbol, self.interval, self.MODEL, WINDOWS)
-        
-        klines = preprocessor.data_load()
-        preprocessor.repreprocess(do_not_use_ready=False)
-
-        return klines, preprocessor.pred_df
-
     def tick(self):
         if self.k_i+1==len(self.klines.index):
-            print("KONIEC")
+            print(f"KONIEC, roi: {round(self.balance/self.start_balance*100-100,2)}%")
             return pd.DataFrame(), None
         else: 
             self.k_i+=1
