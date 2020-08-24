@@ -4,17 +4,19 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout, LSTM, BatchNormalization
 from tensorflow.keras.callbacks import TensorBoard, ModelCheckpoint, EarlyStopping, Callback
 import time
-from utils import FilenameParser
 import os
 import numpy as np
 from datetime import datetime
 
+from utils import FilenameParser
+
+# SETTINGS
 EPOCHS = 15
 BATCH_SIZE = 32
 NODES = 96
 DENSE = 20
 
-dataset_name = '15m-new-10.08.20/q'
+dataset_name = '15m-ehh-24.08.20'
 
 file_list = FilenameParser.get_file_list(dataset_name)
 
@@ -57,7 +59,7 @@ for filename in file_list:
     model.add(Dense(2, activation='softmax'))
 
 
-    opt = tf.keras.optimizers.Adam(lr=0.00005)
+    opt = tf.keras.optimizers.Adam(lr=0.00008)
 
     model.compile(
             loss='sparse_categorical_crossentropy',
@@ -71,20 +73,19 @@ for filename in file_list:
             verbose=1, 
             save_best_only=False, 
             mode='min')
-    try:#
+    try:
         os.makedirs(f"MODELS/{dataset_name}/{NAME}")
     except  FileExistsError:
         pass
 
-    '''
+    
     #szybkie zatrzymywanie
     early_stopping = tf.keras.callbacks.EarlyStopping(
             monitor="val_loss",
-            patience=5,
+            patience=4,
             mode="min",
             restore_best_weights=True)
-    '''
-
+    
     #proste zapisanie w txt ustawien, tak zeby mi bylo wygodnie je na szybko przeczytac
     f = open(f"MODELS/{dataset_name}/{NAME}/details.txt", "w")
     f.write(f"EPOCHS {EPOCHS}\n"+ 
@@ -100,7 +101,7 @@ for filename in file_list:
             verbose=2,
             batch_size=BATCH_SIZE,
             validation_data=(validation_x, validation_y),
-            callbacks=[tensorboard, checkpoint],
+            callbacks=[tensorboard, checkpoint, early_stopping],
             )
 
     

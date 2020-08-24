@@ -8,6 +8,10 @@ import numpy as np
 from GENERAL import General
 from ORDERS import Orders
 
+from sys import path
+path.append("..")
+from vars import Vars
+
 class Brain:
     def __init__(self):
         self.SYMBOL = "BTC"
@@ -23,8 +27,8 @@ class Brain:
 
         self.MODEL = '15m-new-10.08.20/BTCUSDT15m-100x50~0.01-11Aug20-12.33.21/08-TL0.686-TA0.544_VL0.687-VA0.558.model'
 
-        self.MODEL_PATH = "D:/PROJEKTY/Python/ML risk analysis/MODELS/" + self.MODEL
-        self.SCALER_PATH = "D:/PROJEKTY/Python/ML risk analysis/SCALERS/" + self.MODEL[:-58] + '-scaler_data.pickle'
+        self.MODEL_PATH = Vars.main_path + "MODELS/" + self.MODEL
+        self.SCALER_PATH = Vars.main_path + "SCALERS/" + self.MODEL[:-58] + '-scaler_data.pickle'
 
         self.general = General(is_it_for_real=True)
         self.orders = Orders(self.SYMBOL,
@@ -53,11 +57,12 @@ class Brain:
 
     def loop(self):
         while True: 
+            print("Start")
             loopy=1
             while loopy !=0:
-                time.sleep(10) 
-                
-                loopy = self.general.wait_till(self.INTERVAL, advance=10, skip_till=20)
+                time.sleep(180) 
+
+                loopy = self.general.wait_till(self.INTERVAL, advance=10, skip_till=200)
 
                 t = time.time()
                 self.orders.update()

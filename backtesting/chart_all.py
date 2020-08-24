@@ -7,15 +7,18 @@ from datetime import datetime, timedelta
 from ciso8601 import parse_datetime
 import numpy as np
 
+from sys import path
+path.append("..")
+from vars import Vars
+
 folder_docelowy = "STATISTICS"
 search = "BTC15m"
 
 SYMBOL = 'BTC'
 INTERVAL = '15m'
-klines_path = f'D:/PROJEKTY/Python/BINANCE_RAW_DATA/Binance_{SYMBOL}USDT_{INTERVAL}.json'
+klines_path = Vars.main_path +  f'RAW_DATA/Binance_{SYMBOL}USDT_{INTERVAL}.json'
 
-WINDOWS = [ [parse_datetime("2020"+"02"+"23"), timedelta(days=15)],
-            [parse_datetime("2020"+"04"+"10"), timedelta(days=15)], ] 
+WINDOWS = Vars.WINDOWS
 
 def get_data():
     klines_uncut = pd.read_json(klines_path)

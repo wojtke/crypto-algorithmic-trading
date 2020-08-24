@@ -7,103 +7,94 @@ import numpy as np
 import statistics as s
 import heart as h
 
-SPECIAL_NAME='inprogress'
+class Brain():
+    SPECIAL_NAME='inprogress'
 
-SYMBOL = "BTC"
-INTERVAL = '15m'
-LEVERAGE = 10
-ORDER_SIZE = 0.1
-PYRAMID_MAX = 2
+    TARGET = 0.01 
+    '''
+    LEVERAGE = 5
+    ORDER_SIZE = 0.1
+    PYRAMID_MAX = 2
 
-PAST_KLINES = 100
-TARGET = 0.01
+    THRESHOLD = 0.1 #zakres 0-0.5
+    '''
 
-THRESHOLD = 0.14 #zakres 0-0.5
+    MODEL = '15m-ehh-24.08.20/BTCUSDT15m-100x50~0.01-24Aug20-23.26.47/05-TL0.690-TA0.533_VL0.687-VA0.533.model'
+    #secondary_model = '15m-new-10.08.20/BTCUSDT15m-100x50~0.01-11Aug20-12.33.21/08-TL0.686-TA0.544_VL0.687-VA0.558.model'
 
-MODEL = '15m-new-10.08.20/BTCUSDT15m-100x50~0.01-11Aug20-12.33.21/13-TL0.660-TA0.593_VL0.732-VA0.562.model'
-
-name = f"{SYMBOL}{INTERVAL}-T{THRESHOLD}-L{LEVERAGE}O{ORDER_SIZE}P{PYRAMID_MAX}-{SPECIAL_NAME}-{datetime.now().strftime('%d%b%y-%H.%M.%S')}"
-comment = "testing testing ml simple"
-
-
-def decision(pred, change, price):
-    
-    if change>=TARGET or change<=-TARGET:
-        heart.close("SHORT")
-        heart.close("LONG")
-    
-    if (pred>0.5+THRESHOLD):
-        heart.close("SHORT")
-        heart.create_order("LONG", price-5) 
-
-    elif (pred<0.5-THRESHOLD):
-        heart.close("LONG")
-        heart.create_order("SHORT", price+5)
-
-def loop():
-    while True:
-        candles, pred = heart.tick()
-
-        if candles.empty:
-            heart.close("SHORT", cancel_awaiting_orders=True)
-            heart.close("LONG", cancel_awaiting_orders=True)
-            return 0
-
-        #print("Candles ", datetime.fromtimestamp(candles[0].iloc[-1]/1000))
-
-       # heart.print_details()
-
-        decision(pred, heart.change, heart.price)
-
-        #time.sleep(3)
-
-def test_many():
-    global INTERVAL, LEVERAGE, RSI_PERIOD, PAST_KLINES, name
-    intervals = ['15m', '5m']
-    leverages = [1]
-    rsi_periods = [5,7,9,12,15,20]
-    PAST_KLINESs = [300,250,200,150,100,50,25]
-
-    iv_sec = {'1m':60, '3m':60*3, '5m':60*5, '15m':60*15, '30m':60*30, '1h':60*60, '2h':60*60*2, '4h':60*60*4, '8h':60*60*8, '1d':60*60*24, '3d':60*60*24*3, '1w':60*60*24*7}
-    a=0
-    for i in intervals:
-        a+=110/iv_sec[i]
-    print("Estimated time to test all: ", round(a*len(PAST_KLINESs)*len(rsi_periods)*len(leverages),2) , " hours")
-
-    for i in intervals:
-        for l in leverages:
-            for r in rsi_periods:
-                for b in PAST_KLINESs:
-                    INTERVAL = i
-                    LEVERAGE = l
-                    RSI_PERIOD = r
-                    PAST_KLINES = b
-
-                    name = f"{SYMBOL}{INTERVAL}-Lev{LEVERAGE}Ord{ORDER_SIZE}Pyr{PYRAMID_MAX}-Boll{PAST_KLINES}Rsi{RSI_PERIOD}-{round(time.time())}"
-                    print("Interval", i,
-                        "\nLeverage", l,
-                        "\nRsi period", r,
-                        "\nBoll period", b)
-
-                    test()
-
-def test():
-    loop()
-    s.get_trades()
-    s.save_trades(name, MODEL, comment)   
+    comment = "testing testing ml simple"
 
 
 
-heart = h.Account(symbol=SYMBOL, 
-                interval = INTERVAL, 
-                leverage=LEVERAGE, 
-                order_size=ORDER_SIZE, 
-                pyramid_max=PYRAMID_MAX, 
-                FEE=0.0000, 
-                liq_bump=0.004, 
-                start_balance=100, 
-                kline_limit=PAST_KLINES+1,
-                MODEL=MODEL)
+    def decision(self, heart, pred, change, price):
+        if change>=(self.TARGET) or change<=-(self.TARGET):
+            heart.close("SHORT")
+            heart.close("LONG")
+        
+        if (pred>0.5+self.THRESHOLD): # and (pred_2<0.5+self.THRESHOLD):
+            heart.close("SHORT")
+           # if (pred_2<0.5+self.THRESHOLD):
+            heart.create_order("LONG", price*0.999) 
+
+        elif (pred<0.5-self.THRESHOLD): # and (pred_2<0.5+self.THRESHOLD):
+            heart.close("LONG")
+            #if (pred_2<0.5+self.THRESHOLD):
+            heart.create_order("SHORT", price*1.001)
+
+    def loop(self, heart):
+        while True:
+            candles, pred = heart.tick()
+
+            if candles.empty:
+                heart.close("SHORT", cancel_awaiting_orders=True)
+                heart.close("LONG", cancel_awaiting_orders=True)
+                return 0
+
+            #print("Candles ", datetime.fromtimestamp(candles[0].iloc[-1]/1000))
+
+            #heart.print_details()
+
+            self.decision(heart, pred, heart.change, heart.price)
+
+            #time.sleep(3)
+
+    def test_many(self):
+        thresholds = [0.04, 0.06, 0.08, 0.1, 0.12, 0.16]
+        leverages = [7]
+        order_sizes = [0.1]
+        pyramid_maxes = [1]
 
 
-test()
+        for t in thresholds:
+            for l in leverages:
+                for o in order_sizes:
+                    for p in pyramid_maxes:
+                        self.test(self.MODEL, t, l, o, p)
+
+
+    def test(self, MODEL, THRESHOLD, LEVERAGE, ORDER_SIZE, PYRAMID_MAX):
+        self.MODEL = MODEL
+        self.THRESHOLD = THRESHOLD
+        self.LEVERAGE = LEVERAGE
+        self.ORDER_SIZE = ORDER_SIZE
+        self.PYRAMID_MAX = PYRAMID_MAX
+
+        heart = h.Account(MODEL=self.MODEL,
+                    #secondary_model = self.secondary_model,
+                    leverage=self.LEVERAGE, 
+                    order_size=self.ORDER_SIZE, 
+                    pyramid_max=self.PYRAMID_MAX, 
+                    FEE=0.0005, 
+                    liq_bump=0.004, 
+                    start_balance=100)
+
+        name = f"{heart.symbol}{heart.interval}-T{self.THRESHOLD}-L{self.LEVERAGE}O{self.ORDER_SIZE}P{self.PYRAMID_MAX}-{self.SPECIAL_NAME}-{datetime.now().strftime('%d%b%y-%H.%M.%S')}"
+        print(name)
+
+        self.loop(heart)
+        #s.get_trades()
+        s.save_trades(name, self.MODEL, self.comment)   
+
+
+b = Brain()
+b.test_many()

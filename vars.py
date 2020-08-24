@@ -11,3 +11,5 @@ class Vars:
 	'''
 
 	WINDOWS = [ [parse_datetime("2020"+"06"+"01"), timedelta(days=29)] ] 
+
+	main_path = 'D:/PROJEKTY/Python/ML risk analysis/'

@@ -7,17 +7,19 @@ from ciso8601 import parse_datetime
 import os
 import numpy as np
 
+from sys import path
+path.append("..")
+from vars import Vars
+
 SYMBOL = 'BTC'
 INTERVAL = '1h'
 
-klines_path = klines_path = f'D:/PROJEKTY/Python/BINANCE_RAW_DATA/Binance_{SYMBOL}USDT_{INTERVAL}.json'
-#path = f'D:\\PROJEKTY\\Python\\RSI Boll Binance Bot\\RAW_DATA\\Binance_{SYMBOL}USDT_{INTERVAL}.json'
+klines_path = Vars.main_path + f'RAW_DATA/Binance_{SYMBOL}USDT_{INTERVAL}.json'
 
-WINDOWS = [ [parse_datetime("2020"+"02"+"23"), timedelta(days=15)],
-            [parse_datetime("2020"+"04"+"10"), timedelta(days=15)], ] 
+WINDOWS = Vars.WINDOWS
 
 marker_color = {'SHORT': "tomato", "LONG": "lime", "BOTH": 'yellow'}
-marker_color_dark = {'SHORT': "crimson", "LONG": "forestGreen", "BOTH": 'gold', "BOTHBIG": 'orange'}
+marker_color_dark = {'SHORT': "crimson", "LONG": "forestGreen", "BOTH": 'gold', "BOTHEXT": 'orange'}
 marker_symbol = {'SHORT': "triangle-down", "LONG": "triangle-up"}
 
 def get_data():
@@ -251,7 +253,7 @@ chart_avg_balance_change("BOTH", int(len(trades.index)/9))
 chart_avg_balance_change_over_time("SHORT", 3, 1, width=1)
 chart_avg_balance_change_over_time("LONG", 3, 1, width=1)
 chart_avg_balance_change_over_time("BOTH", 3, 1, width=2)
-chart_avg_balance_change_over_time("BOTHBIG", 9, 1, width=2)
+chart_avg_balance_change_over_time("BOTHEXT", 9, 1, width=2)
 
 
 fig.update_layout(legend_orientation="h")

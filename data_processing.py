@@ -7,11 +7,12 @@ from collections import deque
 from utils import Progressbar
 import os
 from sklearn import preprocessing
-from vars import Vars
 import random
 
+from vars import Vars
+
 class Preprocessor:
-    def __init__(self, SYMBOL=None, INTERVAL=None, WINDOWS=None):
+    def __init__(self, SYMBOL=None, INTERVAL=None, WINDOWS=None, klines='spot'):
         if not SYMBOL:
             self.SYMBOL = Vars.SYMBOL
         else:
@@ -27,20 +28,23 @@ class Preprocessor:
         else:
             self.WINDOWS = WINDOWS
 
-        self.klines_path = f'D:/PROJEKTY/Python/ML risk analysis/RAW_DATA/Binance_{self.SYMBOL}USDT_{self.INTERVAL}.json' #VARS
+        if klines == 'spot':
+            self.klines_path = Vars.main_path + f'RAW_DATA/Binance_{self.SYMBOL}USDT_{self.INTERVAL}.json' 
+        elif klines == 'futures':
+            self.klines_path = Vars.main_path + f'RAW_DATA/Binance_futures_{self.SYMBOL}USDT_{self.INTERVAL}.json' 
 
         self.klines = pd.DataFrame()
 
 
-    def repreprocess(self, MODEL, do_not_use_ready=False):
+    def repreprocess(self, MODEL, do_not_use_ready=False, save=True):
         self.read_model_details(MODEL)
 
         try:
             self.pred_df = pickle.load(open( self.READY_PRED_PATH, "rb" ))
-            print("Ready saved predictions found!\n")
+            print("Ready saved predictions found!")
 
             if do_not_use_ready:
-                print("It was specified not to use ready predictions")
+                print("It was specified not to use ready predictions\n")
                 raise Exception("do_not_use_ready=True")
 
         except:
@@ -60,7 +64,9 @@ class Preprocessor:
 
             self.pred_df = pd.DataFrame(data={"preds":(np.array(predx)), "ts":ts, "target":target}, index=pred_index)
 
-            self.save_ready_preds()
+            if save:
+                self.save_ready_preds()
+
             print("...shit repreprocessed and saved")
 
     
@@ -71,7 +77,7 @@ class Preprocessor:
         self.FUTURE_CHECK_LEN = FUTURE_CHECK_LEN
         self.SPECIAL_NAME = SPECIAL_NAME
 
-        self.SAVE_NAME = f'{self.SYMBOL}"USDT"{self.INTERVAL}-{PAST_SEQ_LEN}x{FUTURE_CHECK_LEN}~{TARGET_CHANGE}'
+        self.SAVE_NAME = f'{self.SYMBOL}USDT{self.INTERVAL}-{PAST_SEQ_LEN}x{FUTURE_CHECK_LEN}~{TARGET_CHANGE}'
         
         self.date_str = date_str
 
@@ -99,15 +105,13 @@ class Preprocessor:
         print(f"TEST:    Sells: {val_y.count(0)}, Buys: {val_y.count(1)}")
         print(f"Validation is {round(100 * len(val_y) / (len(val_y) + len(train_y)), 2)}% of all data")
 
-        #log.log(f"{round(100 * len(val_y) / (len(val_y) + len(train_y)), 2)}%")
-
         self.save_train_and_val(train_x, train_y, val_x, val_y)
     
 
     def read_model_details(self, MODEL):
-        self.MODEL_PATH = "D:/PROJEKTY/Python/ML risk analysis/MODELS/" + MODEL
-        self.SCALER_PATH = "D:/PROJEKTY/Python/ML risk analysis/SCALERS/" + MODEL[:-58] + '-scaler_data.pickle'
-        self.READY_PRED_PATH = "D:/PROJEKTY/Python/ML risk analysis/READY_PRED/" + MODEL[:-5] + 'pickle'
+        self.MODEL_PATH = Vars.main_path + "MODELS/" + MODEL
+        self.SCALER_PATH = Vars.main_path + "SCALERS/" + MODEL[:-58] + '-scaler_data.pickle'
+        self.READY_PRED_PATH = Vars.main_path + "READY_PRED/" + MODEL[:-5] + 'pickle'
 
         ix = MODEL.find('~')+1
         self.TARGET_CHANGE = float(MODEL[ix:MODEL.find('-', ix)])
@@ -425,7 +429,6 @@ class Preprocessor:
             y.append(target)
 
         print(f'Returning {which} sequences ({len(y)})')
-        #log.log(len(y))
 
         print(f"...creating {which} sequences done\n")
         return np.array(X), y

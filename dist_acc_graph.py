@@ -8,7 +8,7 @@ from data_processing import Preprocessor
 
 
 
-MODEL = '15m-new-10.08.20/BTCUSDT15m-100x50~0.01-10Aug20-16.05.41/05-TL0.688-TA0.535_VL0.685-VA0.568.model'
+MODEL = '15m-ehh-24.08.20/BTCUSDT15m-100x50~0.01-24Aug20-23.26.47/05-TL0.690-TA0.533_VL0.687-VA0.533.model'
 
 FOLDER = '15m-new-10.08.20/BTCUSDT15m-100x50~0.01-11Aug20-12.33.21/'
 if FOLDER[-1]!="/":
@@ -16,15 +16,17 @@ if FOLDER[-1]!="/":
 
 div = 50
 
+
+
 def main():
     preprocessor = Preprocessor()
     preprocessor.klines_load()
 
-    #graph(MODEL, preprocessor, name=MODEL)
-    many_graphs(FOLDER, preprocessor, thing="VA", value=0.56, mode="max")
+    graph(MODEL, preprocessor, name=MODEL)
+    #many_graphs(FOLDER, preprocessor, thing="VA", value=0.56, mode="max")
 
 def many_graphs(FOLDER, preprocessor, thing="VL", value=0.7, mode="min"):
-    DIR = "D:/PROJEKTY/Python/ML risk analysis/MODELS/" + FOLDER
+    DIR = Vars.main_path + "MODELS/" + FOLDER
     arr=[]
     if mode=="min":
         for d in os.listdir(DIR):

@@ -13,14 +13,12 @@ from data_processing import Preprocessor
 iv_sec = {'1m':60, '3m':60*3, '5m':60*5, '15m':60*15, '30m':60*30, '1h':60*60, '2h':60*60*2, '4h':60*60*4, '8h':60*60*8, '1d':60*60*24, '3d':60*60*24*3, '1w':60*60*24*7}
 
 class Account():
-    def __init__(self, symbol, interval, leverage, order_size, pyramid_max, FEE, liq_bump, start_balance, kline_limit, MODEL):
+    def __init__(self, leverage, order_size, pyramid_max, FEE, liq_bump, start_balance, MODEL, secondary_model=None):
         self.ORDER_SIZE = order_size
         self.pyramid_max = pyramid_max
         self.awaiting_orders = []
 
         self.MODEL = MODEL
-        self.symbol = symbol
-        self.interval = interval
         self.leverage = leverage
         self.FEE = FEE
         self.liq_bump = liq_bump
@@ -38,18 +36,26 @@ class Account():
         self.pyramid = 0
         self.pyramid_awaiting = 0
 
-        self.k_i = kline_limit
-        self.kline_limit = kline_limit
 
-        preprocessor = Preprocessor(self.symbol, self.interval)
-            
+        preprocessor = Preprocessor()
 
         self.klines = preprocessor.klines_load()
         preprocessor.repreprocess(self.MODEL)
 
+        self.symbol = preprocessor.SYMBOL
+        self.interval = preprocessor.INTERVAL
+        self.k_i = preprocessor.PAST_SEQ_LEN + 1
+        self.kline_limit = preprocessor.PAST_SEQ_LEN + 1
+
         self.pred_df = preprocessor.pred_df
 
-
+        if secondary_model:
+            self.secondary_model = secondary_model
+            preprocessor_2 = Preprocessor(klines='futures')
+            preprocessor_2.repreprocess(secondary_model, do_not_use_ready=True)
+            self.pred_df_2 = preprocessor_2.pred_df
+        else:
+            self.secondary_model= None
 
         #self.klines = self.klines.reset_index()
         #self.klines = self.klines.drop(columns=["index"])
@@ -70,8 +76,7 @@ class Account():
             self.close("LONG", cancel_awaiting_orders=True)            
             self.k_i+=self.kline_limit
 
-        candles = self.klines[self.k_i-1:self.k_i]
-        pred = self.pred_df['preds'][self.klines.index[self.k_i-1]]
+        candles = self.klines[self.k_i-1:self.k_i] # kiedys bylo self.klines[self.k_i-self.kline_limit:self.k_i]
 
         self.price = candles.values[-1][4]
         self.time = candles.values[-1][0]
@@ -122,6 +127,10 @@ class Account():
 
             self.trade.update_pnl(PNL_pct_high, PNL_pct_low)
 
+        pred = self.pred_df['preds'][self.klines.index[self.k_i-1]]
+        if self.secondary_model:
+            pred_2 = self.pred_df_2['preds'][self.klines.index[self.k_i-1]]
+            return candles, pred, pred_2
         return candles, pred
 
     def close(self, side, cancel_awaiting_orders=True):
