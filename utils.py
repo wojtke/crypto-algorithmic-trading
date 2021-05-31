@@ -1,3 +1,7 @@
+from datetime import datetime
+import pytz
+import dateparser
+
 class Progressbar:
     def __init__(self, goal, steps=20, length=60, name=''):
         self.goal = goal
@@ -24,7 +28,6 @@ class Progressbar:
         self.message()
         # print(self.name, "finished!")
 
-
 class Logger:
     def __init__(self, params):
         from datetime import datetime
@@ -49,8 +52,6 @@ class Logger:
             from os import makedirs
             makedirs(folder_path)
 
-
-
 class FilenameParser:
     def get_file_list(dataset_name):
         import os
@@ -64,3 +65,27 @@ class FilenameParser:
                     print(file)
                     names.append(file)
         return names
+
+def create_dir(path):
+    try:
+        os.makedirs(path)
+    except  FileExistsError:
+        pass
+
+def date_from_ms(ms):
+    return datetime.utcfromtimestamp(ms//1000)
+
+def now():
+    return datetime.now()
+
+def date_to_ms(date_str):
+    # get epoch value in UTC
+    epoch = datetime.utcfromtimestamp(0).replace(tzinfo=pytz.utc)
+    # parse our date string
+    d = dateparser.parse(date_str)
+    # if the date is not timezone aware apply UTC timezone
+    if d.tzinfo is None or d.tzinfo.utcoffset(d) is None:
+        d = d.replace(tzinfo=pytz.utc)
+
+    # return the difference in time
+    return int((d - epoch).total_seconds() * 1000.0)
