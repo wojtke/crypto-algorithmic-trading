@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from ciso8601 import parse_datetime
 import pickle
 from collections import deque
-from utils import Progressbar
+from utils import Progressbar, create_dir
 import os
 from sklearn import preprocessing
 import random
@@ -12,26 +12,12 @@ import random
 from vars import Vars
 
 class Preprocessor:
-    def __init__(self, SYMBOL=None, INTERVAL=None, WINDOWS=None, klines='spot'):
-        if not SYMBOL:
-            self.SYMBOL = Vars.SYMBOL
-        else:
-            self.SYMBOL = SYMBOL
+    def __init__(self, SYMBOL=None, INTERVAL=None, TEST_PERIOD=None, market='spot'):
+        self.SYMBOL = SYMBOL or Vars.SYMBOL
+        self.INTERVAL = INTERVAL or Vars.INTERVAL
+        self.TEST_PERIOD = TEST_PERIOD or Vars.TEST_PERIOD
 
-        if not INTERVAL:
-            self.INTERVAL = Vars.INTERVAL
-        else:
-            self.INTERVAL = INTERVAL
-
-        if not WINDOWS:
-            self.WINDOWS = Vars.WINDOWS
-        else:
-            self.WINDOWS = WINDOWS
-
-        if klines == 'spot':
-            self.klines_path = Vars.main_path + f'RAW_DATA/Binance_{self.SYMBOL}USDT_{self.INTERVAL}.json' 
-        elif klines == 'futures':
-            self.klines_path = Vars.main_path + f'RAW_DATA/Binance_futures_{self.SYMBOL}USDT_{self.INTERVAL}.json' 
+        self.klines_path = Vars.main_path + f'RAW_DATA/Binance_{market}_{self.SYMBOL}USDT_{self.INTERVAL}.json' 
 
         self.klines = pd.DataFrame()
 
@@ -39,39 +25,39 @@ class Preprocessor:
     def repreprocess(self, MODEL, do_not_use_ready=False, save=True):
         self.read_model_details(MODEL)
 
-        try:
-            self.pred_df = pickle.load(open( self.READY_PRED_PATH, "rb" ))
-            print("Ready saved predictions found!")
+        if do_not_use_ready:
+            print("It was specified not to use ready predictions\n")
+        else:
+            try:
+                self.pred_df = pickle.load(open( self.READY_PRED_PATH, "rb" ))
+                print("Ready saved predictions found!")
+                return self.pred_df
 
-            if do_not_use_ready:
-                print("It was specified not to use ready predictions\n")
-                raise Exception("do_not_use_ready=True")
+            except:
+                print("Ready saved predictions not found.")
 
-        except:
-            print("Repreprocessing shit...")
-            if self.klines.empty:
+        print("Repreprocessing...")
+        if self.klines.empty:
+            self.klines_load()
 
-                self.klines_load()
+        df = self.data_to_pct(self.klines.copy())
 
-            df = self.data_to_pct(self.klines.copy())
+        df = self.data_scale(df)
+        seqs, ts, target, pred_index = self.create_seqs(df, return_more=True)
 
-            df = self.data_scale(df)
-            seqs, ts, target, pred_index = self.data_make_sequences(df)
+        preds = self.data_predict(seqs)
 
-            preds = self.data_predict(seqs)
+        predx = pd.DataFrame(preds)[1]
 
-            predx = pd.DataFrame(preds)[1]
+        self.pred_df = pd.DataFrame(data={"preds":(np.array(predx)), "ts":ts, "target":target}, index=pred_index)
 
-            self.pred_df = pd.DataFrame(data={"preds":(np.array(predx)), "ts":ts, "target":target}, index=pred_index)
+        if save:
+            self.save_ready_preds()
 
-            if save:
-                self.save_ready_preds()
-
-            print("...shit repreprocessed and saved")
+        print("...repreprocessed and saved")
 
     
     def preprocess(self, TARGET_CHANGE, PAST_SEQ_LEN, FUTURE_CHECK_LEN, SPECIAL_NAME, date_str):
-
         self.TARGET_CHANGE = TARGET_CHANGE
         self.PAST_SEQ_LEN = PAST_SEQ_LEN
         self.FUTURE_CHECK_LEN = FUTURE_CHECK_LEN
@@ -83,7 +69,8 @@ class Preprocessor:
 
         print(f"\n ----- Preprocessing {self.SAVE_NAME} ----- ")
 
-        self.klines_load(load_all=True)
+        if self.klines.empty:
+            self.klines_load()
 
         df = self.data_to_pct(self.klines.copy())
 
@@ -93,16 +80,19 @@ class Preprocessor:
         df_t = self.data_scale(df_t, from_saved_scaler=False)
         df_v = self.data_scale(df_v, from_saved_scaler=True)
 
-        train_x, train_y = self.preprocess_create_seqs(df_t, "train")
+        train_x, train_y = self.create_seqs(df_t)
         del df_t
 
-        val_x, val_y = self.preprocess_create_seqs(df_v, 'val')
+        val_x, val_y = self.create_seqs(df_v)
         del df_v
+
+        train_x, train_y = self.balance_and_shuffle(train_x, train_y)
+        val_x, val_y = self.balance_and_shuffle(val_x, val_y)
 
         print('--------------------------------------')
         print(f"Train data len: {len(train_y)}, Validation data len: {len(val_y)}")
-        print(f"TRAIN:   Sells: {train_y.count(0)}, Buys: {train_y.count(1)}")
-        print(f"TEST:    Sells: {val_y.count(0)}, Buys: {val_y.count(1)}")
+        print(f"TRAIN:   Sells: {np.count_nonzero(train_y==0)}, Buys: {np.count_nonzero(train_y==1)}")
+        print(f"TEST:    Sells: {np.count_nonzero(val_y==0)}, Buys: {np.count_nonzero(val_y==1)}")
         print(f"Validation is {round(100 * len(val_y) / (len(val_y) + len(train_y)), 2)}% of all data")
 
         self.save_train_and_val(train_x, train_y, val_x, val_y)
@@ -126,23 +116,21 @@ class Preprocessor:
         self.INTERVAL = MODEL[MODEL.find('USDT')+4:MODEL.find('x')-ix-1]
 
 
-    def klines_load(self, load_all=False):
+    def klines_load(self, load_test_period=False):
         print("Loading klines...")
         print(self.klines_path)
 
         klines_uncut = pd.read_json(self.klines_path)
         klines = pd.DataFrame()
 
-        if not load_all:
-            for w in self.WINDOWS: 
-                ts1 = 1000*datetime.timestamp(w[0] - w[1])
-                ts2 = 1000*datetime.timestamp(w[0] + w[1])
-                a = np.array(klines_uncut.loc[klines_uncut[0].isin([ts1, ts2])].index)
+        if load_test_period:
+            ts1 = 1000*datetime.timestamp(self.TEST_PERIOD[0])
+            ts2 = 1000*datetime.timestamp(self.TEST_PERIOD[1])
 
-                if klines.empty:
-                    klines = klines_uncut.iloc[a[0]:a[1]]
-                else:
-                    klines = klines.append(klines_uncut.iloc[a[0]:a[1]])
+            a = np.array(klines_uncut.loc[klines_uncut[0].isin([ts1, ts2])].index)
+
+            klines = klines_uncut.iloc[a[0]:a[1]]
+            klines = klines.append(klines_uncut.iloc[a[0]:a[1]])
         else:
             klines = klines_uncut
 
@@ -150,14 +138,12 @@ class Preprocessor:
         klines = klines[[0,1,2,3,4,5]]
         klines.columns = ['openTimestamp', 'open', 'high', 'low', 'close', 'volume']
 
+        
         for c in klines.columns:
             klines[c] = pd.to_numeric(klines[c], errors='coerce')
-        '''
-        df = df.reset_index()
-        df = df.drop(columns=["index"])
-        '''
+
         self.klines = klines
-        print("...klines loaded\n")
+        print(f"...klines loaded ({len(klines)})\n")
         return klines
 
 
@@ -223,8 +209,7 @@ class Preprocessor:
         print("...scaling done\n")
         return df
 
-
-    def data_make_sequences(self, df):
+    def create_seqs(self, df, return_more=False):
         print("Creating sequences...")
 
         sliding_window = deque(maxlen=self.PAST_SEQ_LEN) 
@@ -232,15 +217,13 @@ class Preprocessor:
         seqs=[]
         ts =[]
         target=[]
-        pred_index=[]
-
-        prev_index = df.index[0]-1
+        pred_index=[] 
 
         pb = Progressbar(len(df.index), name="Sequentialisation")
 
         for i in range(len(df.index)-1): 
 
-            sliding_window.append([n for n in df.values[i][1:]]) #adds single row of everything except target to sliding window, target is added at last
+            sliding_window.append(df.values[i][1:]) 
 
             if len(sliding_window) == self.PAST_SEQ_LEN: #when sliding window is of desired length
                 seqs.append(np.array(sliding_window))
@@ -255,7 +238,52 @@ class Preprocessor:
         del pb
 
         print("...creating sequences done\n")
-        return np.array(seqs), ts, target, pred_index
+        if return_more:
+            return np.array(seqs), ts, target, pred_index
+        else:
+            return np.array(seqs), np.array(target)
+
+    def balance_and_shuffle(self, X, Y):
+        print("Balancing and shuffling...")
+
+        indices = np.nonzero(Y==None)[0]
+
+        print(f"Deleting {len(indices)} Nones")
+
+        X = np.delete(X, indices, axis=0)
+        Y = np.delete(Y, indices)
+
+        buy_count = np.count_nonzero(Y==1)
+        sell_count = np.count_nonzero(Y==0)
+
+
+        pct_buys = round(100 * buy_count / len(Y))
+        print(f'({buy_count} buys, {sell_count} sells - {pct_buys}%/{100 - pct_buys}%)')
+
+        if buy_count>sell_count:
+            indices = np.nonzero(Y==1)[0]
+            dif = buy_count-sell_count
+
+        else:
+            indices = np.nonzero(Y==0)[0]
+            dif = sell_count-buy_count
+
+        np.random.shuffle(indices)
+        indices = indices[:dif]
+
+        X = np.delete(X, indices, axis=0)
+        Y = np.delete(Y, indices)
+
+        print(f'Equalized both buys/sells to {min(buy_count, sell_count)}')
+
+        indices = np.arange(len(Y))
+        np.random.shuffle(indices)
+
+        X = X[indices]
+        Y = Y[indices]
+
+        print(f"...balancing and shuffling done ({len(Y)})\n")
+        return X, Y
 
 
     def data_predict(self, seqs):
@@ -342,106 +370,29 @@ class Preprocessor:
     def preprocess_separate(self, df):
         print("Separating data...")
 
-        df_t = pd.DataFrame()
-        df_v = pd.DataFrame(data={
-            "openTimestamp": [1337]})  # this is passed just for this df to have an index of 0, this row is later dropped
+        ts1 = int(1000*datetime.timestamp(self.TEST_PERIOD[0]))
+        ts2 = 1000*datetime.timestamp(self.TEST_PERIOD[1])
+        a = np.array(self.klines.loc[self.klines['openTimestamp'].isin([ts1, ts2])].index)
 
-        for w in self.WINDOWS:
-            ts1 = 1000*datetime.timestamp(w[0] - w[1])
-            ts2 = 1000*datetime.timestamp(w[0] + w[1])
-            a = np.array(self.klines.loc[self.klines['openTimestamp'].isin([ts1, ts2])].index)
+        train_mask = (df['openTimestamp']<ts1) | (df['openTimestamp']>=ts2)
 
-            # parts of train set and val set overlap by 1 row, should not be a major leak problem,
-            # but if it is, it needs to be fixed
-            df_t = df_t.append(df.iloc[df_v.index[-1]:a[0] + 1])
-            df_v = df_v.append(df.iloc[a[0]:a[1] + 1])
+        df_t = df.loc[train_mask]
+        df_v = df.loc[~train_mask]
 
-            print(datetime.fromtimestamp(df['openTimestamp'][a[0]] / 1000), "-",
-                  datetime.fromtimestamp(df['openTimestamp'][a[1]] / 1000))
-            print(f"Val window of {a[1] - a[0]} candles")
+        print(f"Train set period: {self.TEST_PERIOD[0]} - {self.TEST_PERIOD[1]}")
 
-        df_t = df_t.append(df.iloc[df_v.index[-1]:df.index[-1]])
-        df_v = df_v.drop([0])
-
-        print(f"\nTrain set candles: {len(df_t.index)}")
+        print(f"Train set candles: {len(df_t.index)}")
         print(f"Validation set candles: {len(df_v.index)}")
         print(f"Val: {round(100 * len(df_v.index) / len(df), 2)} %")
-
-        # droppin and cleaning
-        df_t.drop(columns=['openTimestamp'], inplace=True)
-        df_v.drop(columns=['openTimestamp'], inplace=True)
 
         print("...separating done\n")
         return df_t, df_v
 
 
-    def preprocess_create_seqs(self, df, which):
-        print(f"Creating {which} sequences...")
-
-        sliding_window = deque(maxlen=self.PAST_SEQ_LEN)
-
-        # it is easier to split between two to balance out later
-        buys = []
-        sells = []
-
-        pb = Progressbar(len(df.index), name="Sequentialisation")
-
-        for i in range(len(df.index)-1): 
-
-            sliding_window.append(df.values[i]) #adds single row of everything 
-
-            if len(sliding_window) == self.PAST_SEQ_LEN: #when sliding window is of desired length
-                classification = self.assign_classification(df.index[i])
-                if classification == 0:
-                    sells.append([np.array(sliding_window), classification])
-                elif classification == 1:
-                    buys.append([np.array(sliding_window), classification])
-
-            if df.index[i]+1!=df.index[i+1]:
-                sliding_window.clear()
-
-            pb.update(i)
-        del pb
- 
-        random.shuffle(buys)
-        random.shuffle(sells)
-
-        pct_buys = round(100 * len(buys) / (len(buys) + len(sells)))
-        print(f'Created {which} seqs, ({len(buys)} buys, {len(sells)} sells - {pct_buys}%/{100 - pct_buys}%)')
-
-        lower = min(len(buys), len(sells))
-
-        buys = buys[:lower]
-        sells = sells[:lower]
-
-        print(f'Equalized both {which} buys/sells to {lower}')
-
-        sequential_data = buys + sells
-        del buys
-        del sells
-
-        random.shuffle(sequential_data)  # shuffle again
-
-        X = []
-        y = []
-        for seq, target in sequential_data:
-            X.append(seq)
-            y.append(target)
-
-        print(f'Returning {which} sequences ({len(y)})')
-
-        print(f"...creating {which} sequences done\n")
-        return np.array(X), y
-
-
     def save_train_and_val(self, train_x, train_y, val_x, val_y):
         print('\nSaving training and validation data...')
 
-        try:
-            os.makedirs(f'TRAIN_DATA/{self.INTERVAL}-{self.SPECIAL_NAME}-{self.date_str}')
-
-        except  FileExistsError:
-            pass
+        create_dir(f'TRAIN_DATA/{self.INTERVAL}-{self.SPECIAL_NAME}-{self.date_str}')
 
         pickle_out = open(f"TRAIN_DATA/{self.INTERVAL}-{self.SPECIAL_NAME}-{self.date_str}/{self.SAVE_NAME}-t.pickle", "wb")
         pickle.dump((train_x, train_y), pickle_out)

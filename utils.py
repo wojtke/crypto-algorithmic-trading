@@ -1,9 +1,10 @@
 from datetime import datetime
 import pytz
 import dateparser
+from os import makedirs
 
 class Progressbar:
-    def __init__(self, goal, steps=20, length=60, name=''):
+    def __init__(self, goal, steps=20, length=40, name=''):
         self.goal = goal
         self.steps = steps
         self.done = 0
@@ -13,10 +14,9 @@ class Progressbar:
         self.step_size = goal / steps
 
     def update(self, i):
-        if i % 10 == 0:
-            while i >= self.done * self.step_size:
-                self.message()
-                self.done += 1
+        while i >= self.done * self.step_size:
+            self.message()
+            self.done += 1
 
     def message(self):
         bar = '[' + '=' * round(self.done * self.length / self.steps) + '>' + '-' * (
@@ -68,12 +68,15 @@ class FilenameParser:
 
 def create_dir(path):
     try:
-        os.makedirs(path)
+        makedirs(path)
     except  FileExistsError:
         pass
 
 def date_from_ms(ms):
     return datetime.utcfromtimestamp(ms//1000)
+
+def datetime_to_ms(datetime):
+    pass
 
 def now():
     return datetime.now()
