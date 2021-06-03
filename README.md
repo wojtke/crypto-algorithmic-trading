@@ -2,6 +2,8 @@
 ### It is my first project of more extensive scope. This is where I acknowledged my interest in both Machine learning and algorythmic trading. This project consists of a rather simple LSTM recurrent neural network builder (using Keras). The goal of the neural network is to predict cryptocurenncy price movements - preferrably short term. And it succeeded to do so.
 #### How do I know how well the model will perform when utilized for trading in the future? I don't. I can only look on historical data and try to determine whether it has potential to be effective and make money regardless of market behavior. A big part of my work on this project was to construct tools that best describe model's performance and robustness. Using plotly I made charts that visualise model's prediction pattern and it's accuracy. Also, I made a backtesting simulation of a simple strategies that can be based on model's prediction - and visualisation of how profitable they would be over time. Lastly, I implemented a simple trading bot that can preprocess data, run predictions and send orders to the exchange (Binance) via API.
 
+The project's code and overall structure may seem messy. It is not a suprise since it's my first work of that kind. I've learnt a lot since and I will put my work into imporving the structure, code readability and speed along with ease of use. 
+
 ### Project structure:
  - #### Data processing and model training:
      - **getdata.py - tool used to download historical data from the exchange**
