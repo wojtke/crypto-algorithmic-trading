@@ -1,8 +1,16 @@
-# ML-risk-analysis
-### It is my first project of more extensive scope. This is where I acknowledged my interest in both Machine learning and algorythmic trading. This project consists of a rather simple LSTM recurrent neural network builder (using Keras). The goal of the neural network is to predict cryptocurenncy price movements - preferrably short term. And it succeeded to do so.
-#### How do I know how well the model will perform when utilized for trading in the future? I don't. I can only look on historical data and try to determine whether it has potential to be effective and make money regardless of market behavior. A big part of my work on this project was to construct tools that best describe model's performance and robustness. Using plotly I made charts that visualise model's prediction pattern and it's accuracy. Also, I made a backtesting simulation of a simple strategies that can be based on model's prediction - and visualisation of how profitable they would be over time. Lastly, I implemented a simple trading bot that can preprocess data, run predictions and send orders to the exchange (Binance) via API.
+<p>
+ <img src="https://img.shields.io/badge/Python-FFD43B?style=for-the-badge&logo=python&logoColor=blue">
+ <img src="https://img.shields.io/badge/Keras-D00000?style=for-the-badge&logo=Keras&logoColor=white">
+ <img src="https://img.shields.io/badge/Plotly-239120?style=for-the-badge&logo=plotly&logoColor=white">
+ <img src="https://img.shields.io/badge/Pandas-2C2D72?style=for-the-badge&logo=pandas&logoColor=white">
+ </p>
 
-The project's code and overall structure may seem messy. It is not a suprise since it's my first work of that kind. I've learnt a lot since and I will put my work into imporving the structure, code readability and speed along with ease of use. 
+# Cryptocurrency algorithmic trading using neural networks
+It is my first project of more extensive scope. This is where I acknowledged my interest in both Machine learning and algorythmic trading. This project consists of a rather simple LSTM recurrent neural network builder (using Keras). The goal of the neural network is to predict cryptocurenncy price movements - preferrably short term. And it succeeded to do so.
+
+How do I know how well the model will perform when utilized for trading in the future? I don't. I can only look on historical data and try to determine whether it has potential to be effective and make money regardless of market behavior. A big part of my work on this project was to construct tools that best describe model's performance and robustness. Using plotly I made charts that visualise model's prediction pattern and it's accuracy. Also, I made a backtesting simulation of a simple strategies that can be based on model's prediction - and visualisation of how profitable they would be over time. Lastly, I implemented a simple trading bot that can preprocess data, run predictions and send orders to the exchange (Binance) via API.
+
+The project's code and overall structure may seem messy. It is not a suprise since it's my first work of that kind and I was just a high school student. I've learnt a lot since and ~~I will put my work into imporving the structure, code readability and speed along with ease of use~~ . To be honest, while I'm still passionate about machine learning and its applications for algorithmic trading, I probably won't be maintaining and updating this particular project.
 
 ### Project structure:
  - #### Data processing and model training:
@@ -24,7 +32,7 @@ The project's code and overall structure may seem messy. It is not a suprise sin
      - backtesting/chart.py - visualisation of strategy's performance over time
      - backtesting/chart_all.py - visualisation of multiple strategies' performance over time
  
- - #### Realtime czyli w zasadzie bot tradingowy: 
+ - #### Realtime - basically a trading bot for binance (probably messy and built for deprecated api :/)
      - **realtime/BRAIN.py -  place to set a strategy and run a bot**
      - realtime/HEART.py - account endpoint, placing and monitoring orders
      - realtime/GENERAL.py - ulitities
